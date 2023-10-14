@@ -4,7 +4,7 @@
 use core::ffi::{c_char, CStr};
 
 extern "C" {
-    fn print(message: *const c_char);
+    pub fn print(message: *const c_char);
     fn panic(panic_message: *const c_char) -> !;
 }
 
@@ -12,7 +12,7 @@ extern "C" {
 pub extern "C" fn rust_main() {
     unsafe {
         print(
-            CStr::from_bytes_with_nul(b"Hello from Rust!\0")
+            CStr::from_bytes_with_nul(b"Hello from Rust!\n\0")
                 .unwrap()
                 .as_ptr(),
         );

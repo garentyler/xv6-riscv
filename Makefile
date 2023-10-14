@@ -1,4 +1,5 @@
 K=kernel
+R=$K/rustkernel
 U=user
 P=programs
 
@@ -12,7 +13,6 @@ OBJS = \
   $K/spinlock.o \
   $K/string.o \
   $K/main.o \
-  $K/rust.a \
   $K/vm.o \
   $K/proc.o \
   $K/swtch.o \
@@ -64,10 +64,7 @@ CFLAGS += -mcmodel=medany
 CFLAGS += -ffreestanding -fno-common -nostdlib -mno-relax
 CFLAGS += -I.
 CFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 && echo -fno-stack-protector)
-
-RUSTC = rustc
 TARGET_TRIPLE = riscv64gc-unknown-none-elf
-RUSTFLAGS = -C soft-float=n --target $(TARGET_TRIPLE)
 
 # Disable PIE when possible (for Ubuntu 16.10 toolchain)
 ifneq ($(shell $(CC) -dumpspecs 2>/dev/null | grep -e '[^f]no-pie'),)
@@ -79,8 +76,9 @@ endif
 
 LDFLAGS = -z max-page-size=4096
 
-$K/kernel: $(OBJS) $K/kernel.ld $U/initcode
-	$(LD) $(LDFLAGS) -T $K/kernel.ld -o $K/kernel $(OBJS) 
+$K/kernel: $(OBJS) $K/kernel.ld $U/initcode $R/src
+	cargo +nightly -Z unstable-options -C $R build
+	$(LD) $(LDFLAGS) -T $K/kernel.ld -o $K/kernel $(OBJS) $R/target/$(TARGET_TRIPLE)/debug/librustkernel.a
 	$(OBJDUMP) -S $K/kernel > $K/kernel.asm
 	$(OBJDUMP) -t $K/kernel | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $K/kernel.sym
 
@@ -95,8 +93,8 @@ tags: $(OBJS) _init
 
 ULIB = $U/ulib.o $U/usys.o $U/printf.o $U/umalloc.o
 
-%.a: %.rs
-	$(RUSTC) $(RUSTFLAGS) --crate-type staticlib -o $@ -L $K $^
+# %.a: %.rs
+# 	$(RUSTC) $(RUSTFLAGS) --crate-type staticlib -o $@ -L $K $^
 
 %.o: %.c *.h
 	$(CC) $(CFLAGS) -c $^
@@ -157,6 +155,7 @@ clean:
 	mkfs/mkfs .gdbinit \
         $U/usys.S \
 	$(UPROGS)
+	cargo +nightly -Z unstable-options -C $R clean
 
 # try to generate a unique GDB port
 GDBPORT = $(shell expr `id -u` % 5000 + 25000)
