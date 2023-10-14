@@ -6,6 +6,8 @@
 
 volatile static int started = 0;
 
+void rust_main();
+
 // start() jumps here in supervisor mode on all CPUs.
 void
 main()
@@ -16,6 +18,7 @@ main()
     printf("\n");
     printf("xv6 kernel is booting\n");
     printf("\n");
+    rust_main();
     kinit();         // physical page allocator
     kvminit();       // create kernel page table
     kvminithart();   // turn on paging

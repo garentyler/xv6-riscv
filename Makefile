@@ -1,5 +1,6 @@
 K=kernel
 U=user
+P=programs
 
 OBJS = \
   $K/entry.o \
@@ -11,6 +12,7 @@ OBJS = \
   $K/spinlock.o \
   $K/string.o \
   $K/main.o \
+  $K/rust.a \
   $K/vm.o \
   $K/proc.o \
   $K/swtch.o \
@@ -63,6 +65,10 @@ CFLAGS += -ffreestanding -fno-common -nostdlib -mno-relax
 CFLAGS += -I.
 CFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 && echo -fno-stack-protector)
 
+RUSTC = rustc
+TARGET_TRIPLE = riscv64gc-unknown-none-elf
+RUSTFLAGS = -C soft-float=n --target $(TARGET_TRIPLE)
+
 # Disable PIE when possible (for Ubuntu 16.10 toolchain)
 ifneq ($(shell $(CC) -dumpspecs 2>/dev/null | grep -e '[^f]no-pie'),)
 CFLAGS += -fno-pie -no-pie
@@ -88,6 +94,12 @@ tags: $(OBJS) _init
 	etags *.S *.c
 
 ULIB = $U/ulib.o $U/usys.o $U/printf.o $U/umalloc.o
+
+%.a: %.rs
+	$(RUSTC) $(RUSTFLAGS) --crate-type staticlib -o $@ -L $K $^
+
+%.o: %.c *.h
+	$(CC) $(CFLAGS) -c $^
 
 _%: %.o $(ULIB)
 	$(LD) $(LDFLAGS) -T $U/user.ld -o $@ $^
@@ -116,22 +128,22 @@ mkfs/mkfs: mkfs/mkfs.c $K/fs.h $K/param.h
 .PRECIOUS: %.o
 
 UPROGS=\
-	$U/_cat\
-	$U/_echo\
-	$U/_forktest\
-	$U/_grep\
-	$U/_init\
-	$U/_kill\
-	$U/_ln\
-	$U/_ls\
-	$U/_mkdir\
-	$U/_rm\
-	$U/_sh\
-	$U/_stressfs\
-	$U/_usertests\
-	$U/_grind\
-	$U/_wc\
-	$U/_zombie\
+	$P/_cat\
+	$P/_echo\
+	$P/_forktest\
+	$P/_grep\
+	$P/_grind\
+	$P/_init\
+	$P/_kill\
+	$P/_ln\
+	$P/_ls\
+	$P/_mkdir\
+	$P/_rm\
+	$P/_sh\
+	$P/_stressfs\
+	$P/_usertests\
+	$P/_wc\
+	$P/_zombie\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)
@@ -140,7 +152,7 @@ fs.img: mkfs/mkfs README $(UPROGS)
 
 clean: 
 	rm -f *.tex *.dvi *.idx *.aux *.log *.ind *.ilg \
-	*/*.o */*.d */*.asm */*.sym \
+	*/*.o */*.a */*.d */*.asm */*.sym \
 	$U/initcode $U/initcode.out $K/kernel fs.img \
 	mkfs/mkfs .gdbinit \
         $U/usys.S \
