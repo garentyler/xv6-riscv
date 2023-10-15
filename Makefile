@@ -10,7 +10,6 @@ OBJS = \
   $K/printf.o \
   $K/uart.o \
   $K/kalloc.o \
-  $K/spinlock.o \
   $K/string.o \
   $K/main.o \
   $K/vm.o \
@@ -30,7 +29,8 @@ OBJS = \
   $K/sysfile.o \
   $K/kernelvec.o \
   $K/plic.o \
-  $K/virtio_disk.o
+  $K/virtio_disk.o \
+  $K/riscv.o
 
 # riscv64-unknown-elf- or riscv64-linux-gnu-
 # perhaps in /opt/riscv/bin
@@ -78,6 +78,7 @@ LDFLAGS = -z max-page-size=4096
 
 $K/kernel: $(OBJS) $K/kernel.ld $U/initcode $R/src
 	cargo +nightly -Z unstable-options -C $R build
+	$(OBJDUMP) -S $R/target/$(TARGET_TRIPLE)/debug/librustkernel.a > $R/target/$(TARGET_TRIPLE)/debug/librustkernel.asm
 	$(LD) $(LDFLAGS) -T $K/kernel.ld -o $K/kernel $(OBJS) $R/target/$(TARGET_TRIPLE)/debug/librustkernel.a
 	$(OBJDUMP) -S $K/kernel > $K/kernel.asm
 	$(OBJDUMP) -t $K/kernel | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $K/kernel.sym

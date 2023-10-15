@@ -61,12 +61,12 @@ procinit(void)
 // Must be called with interrupts disabled,
 // to prevent race with process being moved
 // to a different CPU.
-int
-cpuid()
-{
-  int id = r_tp();
-  return id;
-}
+// int
+// cpuid()
+// {
+//   int id = r_tp();
+//   return id;
+// }
 
 // Return this CPU's cpu struct.
 // Interrupts must be disabled.
