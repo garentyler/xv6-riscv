@@ -16,7 +16,7 @@ int nextpid = 1;
 struct spinlock pid_lock;
 
 extern void forkret(void);
-static void freeproc(struct proc *p);
+void freeproc(struct proc *p);
 
 extern char trampoline[]; // trampoline.S
 
@@ -58,56 +58,11 @@ procinit(void)
   }
 }
 
-// Must be called with interrupts disabled,
-// to prevent race with process being moved
-// to a different CPU.
-// int
-// cpuid()
-// {
-//   int id = r_tp();
-//   return id;
-// }
-
-// Return this CPU's cpu struct.
-// Interrupts must be disabled.
-struct cpu*
-mycpu(void)
-{
-  int id = cpuid();
-  struct cpu *c = &cpus[id];
-  return c;
-}
-
-// Return the current struct proc *, or zero if none.
-struct proc*
-myproc(void)
-{
-  push_off();
-  struct cpu *c = mycpu();
-  struct proc *p = c->proc;
-  pop_off();
-  return p;
-}
-
-int
-allocpid()
-{
-  int pid;
-  
-  acquire(&pid_lock);
-  pid = nextpid;
-  nextpid = nextpid + 1;
-  release(&pid_lock);
-
-  return pid;
-}
-
 // Look in the process table for an UNUSED proc.
 // If found, initialize state required to run in the kernel,
 // and return with p->lock held.
 // If there are no free procs, or a memory allocation fails, return 0.
-static struct proc*
-allocproc(void)
+struct proc* allocproc(void)
 {
   struct proc *p;
 
@@ -147,28 +102,6 @@ found:
   p->context.sp = p->kstack + PGSIZE;
 
   return p;
-}
-
-// free a proc structure and the data hanging from it,
-// including user pages.
-// p->lock must be held.
-static void
-freeproc(struct proc *p)
-{
-  if(p->trapframe)
-    kfree((void*)p->trapframe);
-  p->trapframe = 0;
-  if(p->pagetable)
-    proc_freepagetable(p->pagetable, p->sz);
-  p->pagetable = 0;
-  p->sz = 0;
-  p->pid = 0;
-  p->parent = 0;
-  p->name[0] = 0;
-  p->chan = 0;
-  p->killed = 0;
-  p->xstate = 0;
-  p->state = UNUSED;
 }
 
 // Create a user page table for a given process, with no user memory,
@@ -256,23 +189,7 @@ userinit(void)
 
 // Grow or shrink user memory by n bytes.
 // Return 0 on success, -1 on failure.
-int
-growproc(int n)
-{
-  uint64 sz;
-  struct proc *p = myproc();
-
-  sz = p->sz;
-  if(n > 0){
-    if((sz = uvmalloc(p->pagetable, sz, sz + n, PTE_W)) == 0) {
-      return -1;
-    }
-  } else if(n < 0){
-    sz = uvmdealloc(p->pagetable, sz, sz + n);
-  }
-  p->sz = sz;
-  return 0;
-}
+int growproc(int n);
 
 // Create a new process, copying the parent.
 // Sets up child kernel stack to return as if from fork() system call.
@@ -327,18 +244,7 @@ fork(void)
 
 // Pass p's abandoned children to init.
 // Caller must hold wait_lock.
-void
-reparent(struct proc *p)
-{
-  struct proc *pp;
-
-  for(pp = proc; pp < &proc[NPROC]; pp++){
-    if(pp->parent == p){
-      pp->parent = initproc;
-      wakeup(initproc);
-    }
-  }
-}
+void reparent(struct proc *p);
 
 // Exit the current process.  Does not return.
 // An exited process remains in the zombie state
@@ -478,36 +384,10 @@ scheduler(void)
 // be proc->intena and proc->noff, but that would
 // break in the few places where a lock is held but
 // there's no process.
-void
-sched(void)
-{
-  int intena;
-  struct proc *p = myproc();
-
-  if(!holding(&p->lock))
-    panic("sched p->lock");
-  if(mycpu()->noff != 1)
-    panic("sched locks");
-  if(p->state == RUNNING)
-    panic("sched running");
-  if(intr_get())
-    panic("sched interruptible");
-
-  intena = mycpu()->intena;
-  swtch(&p->context, &mycpu()->context);
-  mycpu()->intena = intena;
-}
+void sched(void);
 
 // Give up the CPU for one scheduling round.
-void
-yield(void)
-{
-  struct proc *p = myproc();
-  acquire(&p->lock);
-  p->state = RUNNABLE;
-  sched();
-  release(&p->lock);
-}
+void yield(void);
 
 // A fork child's very first scheduling by scheduler()
 // will swtch to forkret.
@@ -532,39 +412,11 @@ forkret(void)
 
 // Atomically release lock and sleep on chan.
 // Reacquires lock when awakened.
-void
-sleep(void *chan, struct spinlock *lk)
-{
-  struct proc *p = myproc();
-  
-  // Must acquire p->lock in order to
-  // change p->state and then call sched.
-  // Once we hold p->lock, we can be
-  // guaranteed that we won't miss any wakeup
-  // (wakeup locks p->lock),
-  // so it's okay to release lk.
-
-  acquire(&p->lock);  //DOC: sleeplock1
-  release(lk);
-
-  // Go to sleep.
-  p->chan = chan;
-  p->state = SLEEPING;
-
-  sched();
-
-  // Tidy up.
-  p->chan = 0;
-
-  // Reacquire original lock.
-  release(&p->lock);
-  acquire(lk);
-}
+void sleep(void *chan, struct spinlock *lk);
 
 // Wake up all processes sleeping on chan.
 // Must be called without any p->lock.
-void
-wakeup(void *chan)
+void wakeup(void *chan)
 {
   struct proc *p;
 
@@ -582,45 +434,9 @@ wakeup(void *chan)
 // Kill the process with the given pid.
 // The victim won't exit until it tries to return
 // to user space (see usertrap() in trap.c).
-int
-kill(int pid)
-{
-  struct proc *p;
-
-  for(p = proc; p < &proc[NPROC]; p++){
-    acquire(&p->lock);
-    if(p->pid == pid){
-      p->killed = 1;
-      if(p->state == SLEEPING){
-        // Wake process from sleep().
-        p->state = RUNNABLE;
-      }
-      release(&p->lock);
-      return 0;
-    }
-    release(&p->lock);
-  }
-  return -1;
-}
-
-void
-setkilled(struct proc *p)
-{
-  acquire(&p->lock);
-  p->killed = 1;
-  release(&p->lock);
-}
-
-int
-killed(struct proc *p)
-{
-  int k;
-  
-  acquire(&p->lock);
-  k = p->killed;
-  release(&p->lock);
-  return k;
-}
+int kill(int pid);
+void setkilled(struct proc *p);
+int killed(struct proc *p);
 
 // Copy to either a user address, or kernel address,
 // depending on usr_dst.
@@ -655,8 +471,7 @@ either_copyin(void *dst, int user_src, uint64 src, uint64 len)
 // Print a process listing to console.  For debugging.
 // Runs when user types ^P on console.
 // No lock to avoid wedging a stuck machine further.
-void
-procdump(void)
+void procdump(void)
 {
   static char *states[] = {
   [UNUSED]    "unused",
@@ -669,7 +484,7 @@ procdump(void)
   struct proc *p;
   char *state;
 
-  printf("\n");
+  printstr("\n");
   for(p = proc; p < &proc[NPROC]; p++){
     if(p->state == UNUSED)
       continue;
@@ -677,7 +492,12 @@ procdump(void)
       state = states[p->state];
     else
       state = "???";
-    printf("%d %s %s", p->pid, state, p->name);
-    printf("\n");
+
+    printint(p->pid);
+    printstr(" ");
+    printstr(state);
+    printstr(" ");
+    printstr(p->name);
+    printstr("\n");
   }
 }

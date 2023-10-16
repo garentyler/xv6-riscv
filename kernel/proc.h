@@ -107,3 +107,4 @@ struct proc {
 };
 
 int cpuid();
+int allocpid();

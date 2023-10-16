@@ -1,3 +1,5 @@
+#pragma once
+
 struct buf;
 struct context;
 struct file;
@@ -18,7 +20,6 @@ void            bpin(struct buf*);
 void            bunpin(struct buf*);
 
 // console.c
-void            consoleinit(void);
 void            consoleintr(int);
 void            consputc(int);
 
@@ -77,9 +78,12 @@ int             piperead(struct pipe*, uint64, int);
 int             pipewrite(struct pipe*, uint64, int);
 
 // printf.c
-void            printf(char*, ...);
-void            panic(char*) __attribute__((noreturn));
-void            printfinit(void);
+__attribute__((noreturn)) void panic(char *s);
+void printfinit(void);
+void printstr(char *s);
+void printint(int n);
+void printhex(int n);
+void printptr(uint64 p);
 
 // proc.c
 int             cpuid(void);
@@ -147,13 +151,7 @@ void            trapinit(void);
 void            trapinithart(void);
 extern struct spinlock tickslock;
 void            usertrapret(void);
-
-// uart.c
-void            uartinit(void);
 void            uartintr(void);
-void            uartputc(int);
-void            uartputc_sync(int);
-int             uartgetc(void);
 
 // vm.c
 void            kvminit(void);

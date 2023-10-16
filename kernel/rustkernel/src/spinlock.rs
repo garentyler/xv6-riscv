@@ -15,6 +15,13 @@ pub struct Spinlock {
     pub cpu: *mut Cpu,
 }
 impl Spinlock {
+    pub const unsafe fn uninitialized() -> Spinlock {
+        Spinlock {
+            locked: AtomicBool::new(false),
+            name: null_mut(),
+            cpu: null_mut(),
+        }
+    }
     /// Initializes a `Spinlock`.
     pub fn new(name: *mut c_char) -> Spinlock {
         Spinlock {

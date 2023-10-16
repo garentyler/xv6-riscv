@@ -159,7 +159,6 @@ pub unsafe fn w_mscratch(x: u64) {
     asm!("csrw mscratch, {}", in(reg) x);
 }
 
-
 // Supervisor Trap Cause
 #[inline(always)]
 pub unsafe fn r_scause() -> u64 {

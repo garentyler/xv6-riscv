@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+arrayvec = { version = "0.7.4", default-features = false }
+format_no_std = "1.0.0"
 libc = { version = "0.2.149", default-features = false }
 
 [lib]
