@@ -5,7 +5,6 @@ P=programs
 
 OBJS = \
   $K/entry.o \
-  $K/console.o \
   $K/vm.o \
   $K/proc.o \
   $K/swtch.o \

@@ -1,6 +1,6 @@
 use crate::{
     proc::{myproc, sleep, wakeup},
-    spinlock::{self, Spinlock},
+    sync::spinlock::{self, Spinlock},
 };
 use core::{ffi::c_char, ptr::addr_of_mut};
 

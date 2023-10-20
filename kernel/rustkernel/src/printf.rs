@@ -1,4 +1,4 @@
-use crate::spinlock::Spinlock;
+use crate::sync::spinlock::Spinlock;
 use core::ffi::{c_char, CStr};
 
 pub use crate::panic;
@@ -25,7 +25,7 @@ macro_rules! print {
         ).unwrap();
 
         for c in s.as_bytes() {
-            unsafe { $crate::console::consputc(*c as i8 as i32) };
+            $crate::console::consputc(*c);
         }
 
         unsafe { $crate::kalloc::kfree(buf.cast()) };

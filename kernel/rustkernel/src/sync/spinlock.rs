@@ -23,7 +23,7 @@ impl Spinlock {
         }
     }
     /// Initializes a `Spinlock`.
-    pub fn new(name: *mut c_char) -> Spinlock {
+    pub const fn new(name: *mut c_char) -> Spinlock {
         Spinlock {
             locked: AtomicBool::new(false),
             cpu: null_mut(),
@@ -57,7 +57,7 @@ impl Spinlock {
         }
 
         self.cpu = null_mut();
-
+        
         self.locked.store(false, Ordering::Release);
 
         pop_off();
@@ -94,24 +94,26 @@ pub unsafe extern "C" fn push_off() {
     let cpu = mycpu();
 
     riscv::intr_off();
-    if (*cpu).noff == 0 {
-        (*cpu).intena = old;
+    if (*cpu).interrupt_disable_layers == 0 {
+        (*cpu).previous_interrupts_enabled = old;
     }
-    (*cpu).noff += 1;
+    (*cpu).interrupt_disable_layers += 1;
 }
 #[no_mangle]
 pub unsafe extern "C" fn pop_off() {
     let cpu = mycpu();
 
     if riscv::intr_get() == 1 {
+        // crate::panic_byte(b'0');
         panic!("pop_off - interruptible");
-    } else if (*cpu).noff < 1 {
+    } else if (*cpu).interrupt_disable_layers < 1 {
+        // crate::panic_byte(b'1');
         panic!("pop_off");
     }
 
-    (*cpu).noff -= 1;
+    (*cpu).interrupt_disable_layers -= 1;
 
-    if (*cpu).noff == 0 && (*cpu).intena == 1 {
+    if (*cpu).interrupt_disable_layers == 0 && (*cpu).previous_interrupts_enabled == 1 {
         riscv::intr_on();
     }
 }

@@ -4,7 +4,7 @@
 
 use crate::{
     riscv::{memlayout::PHYSTOP, pg_round_up, PGSIZE},
-    spinlock::Spinlock,
+    sync::spinlock::Spinlock,
     string::memset,
 };
 use core::{

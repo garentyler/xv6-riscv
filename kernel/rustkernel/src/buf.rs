@@ -1,4 +1,4 @@
-use crate::{fs::BSIZE, sleeplock::Sleeplock};
+use crate::{fs::BSIZE, sync::sleeplock::Sleeplock};
 
 #[repr(C)]
 pub struct Buf {

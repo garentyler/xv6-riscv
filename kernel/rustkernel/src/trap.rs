@@ -1,8 +1,8 @@
 use crate::{
     printf::print,
-    proc::{cpuid, wakeup},
+    proc::{cpuid, wakeup, mycpu},
     riscv::*,
-    spinlock::Spinlock,
+    sync::spinlock::Spinlock,
 };
 use core::{ffi::CStr, ptr::addr_of_mut};
 
@@ -142,3 +142,41 @@ pub unsafe extern "C" fn devintr() -> i32 {
         0
     }
 }
+
+pub struct InterruptBlocker;
+impl InterruptBlocker {
+    pub fn new() {
+        unsafe {
+            let interrupts_before = intr_get();
+            let cpu = mycpu();
+            
+            intr_off();
+
+            if (*cpu).interrupt_disable_layers == 0 {
+                (*cpu).previous_interrupts_enabled = interrupts_before;
+            }
+            (*cpu).interrupt_disable_layers += 1;
+            // crate::sync::spinlock::push_off();
+        }
+    }
+}
+impl core::ops::Drop for InterruptBlocker {
+    fn drop(&mut self) {
+        unsafe {
+            let cpu = mycpu();
+
+            if intr_get() == 1 || (*cpu).interrupt_disable_layers < 1 {
+                // panic!("pop_off mismatched");
+                return;
+            }
+
+            (*cpu).interrupt_disable_layers -= 1;
+
+            if (*cpu).interrupt_disable_layers == 0 && (*cpu).previous_interrupts_enabled == 1 {
+                intr_on();
+            }
+            // crate::sync::spinlock::pop_off();
+        }
+    }
+}
+impl !Send for InterruptBlocker {}

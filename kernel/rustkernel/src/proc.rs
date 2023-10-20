@@ -4,7 +4,8 @@ use crate::{
     kalloc::kfree,
     param::*,
     riscv::{self, Pagetable, PTE_W},
-    spinlock::{pop_off, push_off, Spinlock},
+    sync::spinlock::{pop_off, push_off, Spinlock},
+    sync::spinmutex::SpinMutexGuard,
 };
 use core::{
     ffi::{c_char, c_void},
@@ -29,20 +30,22 @@ extern "C" {
     pub fn fork() -> i32;
     pub fn exit(status: i32) -> !;
     pub fn wait(addr: u64) -> i32;
+    pub fn procdump();
     pub fn proc_pagetable(p: *mut Proc) -> Pagetable;
     pub fn proc_freepagetable(pagetable: Pagetable, sz: u64);
-    pub fn wakeup(chan: *mut c_void);
+    pub fn wakeup(chan: *const c_void);
     pub fn allocproc() -> *mut Proc;
     // pub fn freeproc(p: *mut Proc);
     pub fn uvmalloc(pagetable: Pagetable, oldsz: u64, newsz: u64, xperm: i32) -> u64;
     pub fn uvmdealloc(pagetable: Pagetable, oldsz: u64, newsz: u64) -> u64;
     // pub fn sched();
+    pub fn scheduler() -> !;
     pub fn swtch(a: *mut Context, b: *mut Context);
 }
 
 /// Saved registers for kernel context switches.
 #[repr(C)]
-#[derive(Default)]
+#[derive(Copy, Clone, Default)]
 pub struct Context {
     pub ra: u64,
     pub sp: u64,
@@ -61,26 +64,47 @@ pub struct Context {
     pub s10: u64,
     pub s11: u64,
 }
+impl Context {
+    pub const fn new() -> Context {
+        Context {
+            ra: 0u64,
+            sp: 0u64,
+            s0: 0u64,
+            s1: 0u64,
+            s2: 0u64,
+            s3: 0u64,
+            s4: 0u64,
+            s5: 0u64,
+            s6: 0u64,
+            s7: 0u64,
+            s8: 0u64,
+            s9: 0u64,
+            s10: 0u64,
+            s11: 0u64,
+        }
+    }
+}
 
 /// Per-CPU state.
 #[repr(C)]
+#[derive(Copy, Clone)]
 pub struct Cpu {
-    /// The process running on this cpu, or null.
     pub proc: *mut Proc,
-    /// swtch() here to enter scheduler()
+        /// swtch() here to enter scheduler()
     pub context: Context,
     /// Depth of push_off() nesting.
-    pub noff: i32,
+    pub interrupt_disable_layers: i32,
     /// Were interrupts enabled before push_off()?
-    pub intena: i32,
+    pub previous_interrupts_enabled: i32,
 }
-impl Default for Cpu {
-    fn default() -> Self {
+impl Cpu {
+    pub const fn new() -> Cpu {
         Cpu {
             proc: null_mut(),
-            context: Context::default(),
-            noff: 0,
-            intena: 0,
+            // proc: None,
+            context: Context::new(),
+            interrupt_disable_layers: 0,
+            previous_interrupts_enabled: 0,
         }
     }
 }
@@ -360,9 +384,9 @@ pub unsafe extern "C" fn r#yield() {
 
 /// Switch to scheduler.  Must hold only p->lock
 /// and have changed proc->state. Saves and restores
-/// intena because intena is a property of this
+/// previous_interrupts_enabled because previous_interrupts_enabled is a property of this
 /// kernel thread, not this CPU. It should
-/// be proc->intena and proc->noff, but that would
+/// be proc->previous_interrupts_enabled and proc->interrupt_disable_layers, but that would
 /// break in the few places where a lock is held but
 /// there's no process.
 #[no_mangle]
@@ -372,7 +396,7 @@ pub unsafe extern "C" fn sched() {
 
     if !(*p).lock.held_by_current_cpu() {
         panic!("sched p->lock");
-    } else if (*c).noff != 1 {
+    } else if (*c).interrupt_disable_layers != 1 {
         panic!("sched locks");
     } else if (*p).state == ProcState::Running {
         panic!("sched running");
@@ -380,9 +404,9 @@ pub unsafe extern "C" fn sched() {
         panic!("sched interruptible");
     }
 
-    let intena = (*c).intena;
+    let previous_interrupts_enabled = (*c).previous_interrupts_enabled;
     swtch(addr_of_mut!((*p).context), addr_of_mut!((*c).context));
-    (*c).intena = intena;
+    (*c).previous_interrupts_enabled = previous_interrupts_enabled;
 }
 
 /// Atomically release lock and sleep on chan.
@@ -413,6 +437,28 @@ pub unsafe extern "C" fn sleep(chan: *mut c_void, lock: *mut Spinlock) {
     // Reacquire original lock.
     (*p).lock.unlock();
     (*lock).lock();
+}
+
+pub unsafe fn sleep_mutex<T>(chan: *mut c_void, mutex: &mut SpinMutexGuard<T>) {
+    let p = myproc();
+    let mutex = mutex.mutex;
+
+    (*p).lock.lock();
+    mutex.unlock();
+
+    // Go to sleep.
+    (*p).chan = chan;
+    (*p).state = ProcState::Sleeping;
+
+    sched();
+
+    // Tidy up.
+    (*p).chan = null_mut();
+
+    // Reacquire original lock.
+    (*p).lock.unlock();
+    let guard = mutex.lock();
+    core::mem::forget(guard);
 }
 
 /// Kill the process with the given pid.
@@ -453,3 +499,4 @@ pub unsafe extern "C" fn killed(p: *mut Proc) -> i32 {
     (*p).lock.unlock();
     k
 }
+ 

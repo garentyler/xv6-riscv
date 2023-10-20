@@ -2,6 +2,7 @@
 #![no_std]
 #![allow(dead_code)]
 #![allow(clippy::missing_safety_doc)]
+#![feature(negative_impls)]
 
 extern crate alloc;
 extern crate core;
@@ -15,8 +16,7 @@ pub(crate) mod param;
 pub mod printf;
 pub mod proc;
 pub(crate) mod riscv;
-pub mod sleeplock;
-pub mod spinlock;
+pub mod sync;
 pub mod start;
 pub mod string;
 pub mod syscall;
@@ -35,7 +35,7 @@ extern "C" {
     pub fn fileinit();
     pub fn virtio_disk_init();
     pub fn userinit();
-    pub fn scheduler();
+    // pub fn scheduler();
 }
 
 use crate::{printf::print, proc::cpuid};
@@ -45,7 +45,7 @@ pub static mut STARTED: bool = false;
 pub static mut PANICKED: bool = false;
 
 #[no_mangle]
-pub unsafe extern "C" fn main() {
+pub unsafe extern "C" fn main() -> ! {
     if cpuid() == 0 {
         console::consoleinit();
         printf::printfinit();
@@ -73,7 +73,7 @@ pub unsafe extern "C" fn main() {
         riscv::plic::plicinithart();
     }
 
-    scheduler();
+    proc::scheduler();
 }
 
 #[panic_handler]
@@ -85,7 +85,7 @@ fn panic_wrapper(panic_info: &core::panic::PanicInfo) -> ! {
     }
 
     unsafe { crate::PANICKED = true };
-
+    
     loop {
         core::hint::spin_loop();
     }

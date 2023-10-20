@@ -3,85 +3,143 @@
 
 use crate::{
     console::consoleintr,
-    proc::{sleep, wakeup},
+    proc::{sleep, sleep_mutex, wakeup},
     riscv::memlayout::UART0,
-    spinlock::{pop_off, push_off, Spinlock},
+    sync::spinlock::{pop_off, push_off, Spinlock},
+    sync::spinmutex::SpinMutex,
+    trap::InterruptBlocker,
 };
 use core::{ffi::CStr, ptr::addr_of_mut};
 
-/// The UART control registers are memory-mapped
-/// at address UART0. This function returns the
-/// address of one of the registers.
-#[inline(always)]
-fn get_register_addr<N: Into<u64>>(register: N) -> *mut u8 {
-    let register: u64 = register.into();
-    (UART0 + register) as *mut u8
+enum Register {
+    ReceiveHolding,
+    TransmitHolding,
+    InterruptEnable,
+    FIFOControl,
+    InterruptStatus,
+    LineControl,
+    LineStatus,
+}
+impl Register {
+    pub fn as_ptr(&self) -> *mut u8 {
+        let addr = UART0 + match self {
+            Register::ReceiveHolding => 0,
+            Register::TransmitHolding => 0,
+            Register::InterruptEnable => 1,
+            Register::FIFOControl => 2,
+            Register::InterruptStatus => 2,
+            Register::LineControl => 2,
+            Register::LineStatus => 5,
+        };
+        addr as *mut u8
+    }
+    pub fn read(&self) -> u8 {
+        unsafe { self.as_ptr().read_volatile() }
+    }
+    pub fn write(&self, value: u8) {
+        unsafe { self.as_ptr().write_volatile(value) }
+    }
+}
+
+pub static uart: SpinMutex<Uart> = SpinMutex::new(Uart {
+    buffer: [0u8; UART_TX_BUF_SIZE],
+    write_index: 0,
+    read_index: 0,
+});
+
+pub struct Uart {
+    pub buffer: [u8; UART_TX_BUF_SIZE],
+    pub write_index: usize,
+    pub read_index: usize,
+}
+impl Uart {
+    pub fn write_byte_sync(x: u8) {
+        // let _ = InterruptBlocker::new();
+        unsafe { push_off(); }
+
+        if unsafe { crate::PANICKED } {
+            loop {
+                core::hint::spin_loop();
+            }
+        }
+
+        // Wait for Transmit Holding Empty to be set in LSR.
+        while Register::LineStatus.read() & LSR_TX_IDLE == 0 {
+            core::hint::spin_loop();
+        }
+
+        Register::TransmitHolding.write(x);
+
+        unsafe { pop_off(); }
+    }
+    /// If the UART is idle, and a character is
+    /// waiting in the transmit buffer, send it.
+    pub fn send_queued_bytes(&mut self) {
+        loop {
+            self.write_index %= self.buffer.len();
+            self.read_index %= self.buffer.len();
+
+            if self.write_index == self.read_index {
+                // Transmit buffer is ready.
+                return;
+            }
+
+            let c = self.buffer[self.read_index];
+            self.read_index += 1;
+
+            // Maybe uartputc() is waiting for space in the buffer.
+            unsafe { wakeup(addr_of_mut!(self.read_index).cast()) };
+
+            Register::TransmitHolding.write(c);
+        }
+    }
 }
 
 // The UART control registers.
 // Some have different meanings for read vs write.
 // See http://byterunner.com/16550.html
 
-/// Receive Holding Register (for input bytes)
-const RHR: u8 = 0;
-/// Transmit Holding Register (for output bytes)
-const THR: u8 = 0;
 /// Interrupt Enable Register
-const IER: u8 = 1;
 const IER_RX_ENABLE: u8 = 1 << 0;
 const IER_TX_ENABLE: u8 = 1 << 1;
-/// FIFO control register
-const FCR: u8 = 2;
 const FCR_FIFO_ENABLE: u8 = 1 << 0;
 /// Clear the content of the two FIFOs.
 const FCR_FIFO_CLEAR: u8 = 3 << 1;
-/// Interrupt Status Register
-const ISR: u8 = 2;
-/// Line Control Register
-const LCR: u8 = 2;
 const LCR_EIGHT_BITS: u8 = 3;
 /// Special mode to set baud rate
 const LCR_BAUD_LATCH: u8 = 1 << 7;
-/// Line Status Register
-const LSR: u8 = 5;
 /// Input is waiting to be read from RHR
 const LSR_RX_READY: u8 = 1 << 0;
 /// THR can accept another character to send
 const LSR_TX_IDLE: u8 = 1 << 5;
 
-#[inline(always)]
-unsafe fn read_register<N: Into<u64>>(register: N) -> u8 {
-    *get_register_addr(register)
-}
-#[inline(always)]
-unsafe fn write_register<N: Into<u64>>(register: N, value: u8) {
-    *get_register_addr(register) = value;
-}
-
 static mut uart_tx_lock: Spinlock = unsafe { Spinlock::uninitialized() };
-const UART_TX_BUF_SIZE: u64 = 32;
-static mut uart_tx_buf: [u8; UART_TX_BUF_SIZE as usize] = [0u8; UART_TX_BUF_SIZE as usize];
+const UART_TX_BUF_SIZE: usize = 32;
+static mut uart_tx_buf: [u8; UART_TX_BUF_SIZE] = [0u8; UART_TX_BUF_SIZE];
+// static uart_tx_buf: SpinMutex<[u8; UART_TX_BUF_SIZE]> = SpinMutex::new([0u8; UART_TX_BUF_SIZE]);
 /// Write next to uart_tx_buf[uart_tx_w % UART_TX_BUF_SIZE]
-static mut uart_tx_w: u64 = 0;
+static mut uart_tx_w: usize = 0;
 /// Read next from uart_tx_buf[uart_tx_r % UART_TX_BUF_SIZE]
-static mut uart_tx_r: u64 = 0;
+static mut uart_tx_r: usize = 0;
 
 pub(crate) unsafe fn uartinit() {
     // Disable interrupts.
-    write_register(IER, 0x00);
+    Register::InterruptEnable.write(0x00);
     // Special mode to set baud rate.
-    write_register(LCR, LCR_BAUD_LATCH);
-    // LSB for baud rate of 38.4K.
-    write_register(0u8, 0x03);
-    // MSB for baud rate of 38.4K.
-    write_register(1u8, 0x00);
+    Register::LineControl.write(LCR_BAUD_LATCH);
+    unsafe {
+        // LSB for baud rate of 38.4K.
+        *(UART0 as *mut u8) = 0x03;
+        // MSB for baud rate of 38.4K.
+        *((UART0 + 1) as *mut u8) = 0x00;
+    }
     // Leave set-baud mode and set
     // word length to 8 bits, no parity.
-    write_register(LCR, LCR_EIGHT_BITS);
+    Register::LineControl.write(LCR_EIGHT_BITS);
     // Reset and enable FIFOs.
-    write_register(FCR, FCR_FIFO_ENABLE | FCR_FIFO_CLEAR);
+    Register::FIFOControl.write(FCR_FIFO_ENABLE | FCR_FIFO_CLEAR);
     // Enable transmit and receive interrupts.
-    write_register(IER, IER_TX_ENABLE | IER_RX_ENABLE);
+    Register::InterruptEnable.write(IER_TX_ENABLE | IER_RX_ENABLE);
 
     uart_tx_lock = Spinlock::new(
         CStr::from_bytes_with_nul(b"uart\0")
@@ -97,8 +155,10 @@ pub(crate) unsafe fn uartinit() {
 /// Because it may block, it can't be called
 /// from interrupts, it's only suitable for use
 /// by write().
-pub(crate) unsafe fn uartputc(c: i32) {
+pub(crate) unsafe fn uartputc(c: u8) {
     uart_tx_lock.lock();
+    // let mut buf = uart_tx_buf.lock();
+    // let u = uart.lock();
 
     if crate::PANICKED {
         loop {
@@ -115,7 +175,7 @@ pub(crate) unsafe fn uartputc(c: i32) {
         );
     }
 
-    uart_tx_buf[(uart_tx_w % UART_TX_BUF_SIZE) as usize] = c as i8 as u8;
+    uart_tx_buf[(uart_tx_w % UART_TX_BUF_SIZE) as usize] = c;
     uart_tx_w += 1;
     uartstart();
     uart_tx_lock.unlock();
@@ -125,21 +185,22 @@ pub(crate) unsafe fn uartputc(c: i32) {
 /// use interrupts, for use by kernel printf() and
 /// to echo characters. It spins waiting for the UART's
 /// output register to be empty.
-pub(crate) unsafe fn uartputc_sync(c: i32) {
+pub(crate) unsafe fn uartputc_sync(c: u8) {
     push_off();
+    Uart::write_byte_sync(c);
 
-    if crate::PANICKED {
-        loop {
-            core::hint::spin_loop();
-        }
-    }
+    // if crate::PANICKED {
+    //     loop {
+    //         core::hint::spin_loop();
+    //     }
+    // }
 
-    // Wait for Transmit Holding Empty to be set in LSR.
-    while read_register(LSR) & LSR_TX_IDLE == 0 {
-        core::hint::spin_loop();
-    }
+    // // Wait for Transmit Holding Empty to be set in LSR.
+    // while Register::LineStatus.read() & LSR_TX_IDLE == 0 {
+    //     core::hint::spin_loop();
+    // }
 
-    write_register(THR, c as i8 as u8);
+    // Register::TransmitHolding.write(c);
 
     pop_off();
 }
@@ -154,47 +215,45 @@ unsafe fn uartstart() {
             // Transmit buffer is ready.
             return;
         }
-
-        if read_register(LSR) & LSR_TX_IDLE == 0 {
+        if Register::LineStatus.read() & LSR_TX_IDLE == 0 {
             // The UART transmit holding register is full,
             // so we cannot give it another byte.
             // It will interrupt when it's ready for a new byte.
             return;
         }
 
+        // let buf = uart_tx_buf.lock();
         let c = uart_tx_buf[(uart_tx_r % UART_TX_BUF_SIZE) as usize];
         uart_tx_r += 1;
 
         // Maybe uartputc() is waiting for space in the buffer.
         wakeup(addr_of_mut!(uart_tx_r).cast());
 
-        write_register(THR, c);
+        Register::TransmitHolding.write(c);
     }
 }
 
-/// Read one input character from the UART.
-/// Return -1 if nothing is waiting.
-unsafe fn uartgetc() -> i32 {
-    if read_register(LSR) & 0x01 != 0 {
+/// Read one input byte from the UART.
+pub(crate) fn uartgetc() -> Option<u8> {
+    if Register::LineStatus.read() & 0x01 != 0 {
         // Input data is ready.
-        read_register(RHR) as i32
+        Some(Register::ReceiveHolding.read())
     } else {
-        -1
+        None
     }
 }
 
 /// Handle a UART interrupt, raised because input has
 /// arrived, or the uart is ready for more output, or
 /// both. Called from devintr().
-#[no_mangle]
-pub unsafe extern "C" fn uartintr() {
+pub(crate) unsafe fn uartintr() {
     // Read and process incoming characters.
     loop {
-        let c = uartgetc();
-        if c == -1 {
+        if let Some(c) = uartgetc() {
+            consoleintr(c);
+        } else {
             break;
         }
-        consoleintr(c);
     }
 
     // Send buffered characters.
