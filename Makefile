@@ -9,7 +9,6 @@ OBJS = \
   $K/proc.o \
   $K/swtch.o \
   $K/trampoline.o \
-  $K/trap.o \
   $K/bio.o \
   $K/fs.o \
   $K/log.o \

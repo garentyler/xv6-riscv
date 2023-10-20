@@ -10,14 +10,11 @@
 
 use crate::{
     file::{devsw, CONSOLE},
-    proc::{killed, myproc, sleep_mutex, wakeup, procdump},
+    proc::{killed, myproc, procdump, sleep_mutex, wakeup},
     sync::spinmutex::SpinMutex,
-    uart::{uartinit, uartputc, uartputc_sync},
+    uart::{uartinit, uartputc, Uart},
 };
-use core::{
-    ffi::c_void,
-    ptr::addr_of_mut,
-};
+use core::{ffi::c_void, ptr::addr_of_mut};
 
 extern "C" {
     fn either_copyin(dst: *mut c_void, user_src: i32, src: u64, len: u64) -> i32;
@@ -65,15 +62,13 @@ const fn ctrl_x(x: u8) -> u8 {
 /// Called by printf(), and to echo input
 /// characters but not from write().
 pub fn consputc(c: u8) {
-    unsafe {
-        if c == BACKSPACE {
-            // If the user typed backspace, overwrite with a space.
-            uartputc_sync(0x08);
-            uartputc_sync(b' ');
-            uartputc_sync(0x08);
-        } else {
-            uartputc_sync(c);
-        }
+    if c == BACKSPACE {
+        // If the user typed backspace, overwrite with a space.
+        Uart::write_byte_sync(0x08);
+        Uart::write_byte_sync(b' ');
+        Uart::write_byte_sync(0x08);
+    } else {
+        Uart::write_byte_sync(c);
     }
 }
 
@@ -114,12 +109,9 @@ pub unsafe extern "C" fn consoleread(user_dst: i32, mut dst: u64, mut n: i32) ->
                 // cons.lock.unlock();
                 return -1;
             }
-            sleep_mutex(
-                addr_of_mut!(console.read_index).cast(),
-                &mut console,
-            );
+            sleep_mutex(addr_of_mut!(console.read_index).cast(), &mut console);
         }
-        
+
         c = *console.read_byte();
         console.read_index += 1;
 
@@ -177,7 +169,9 @@ pub fn consoleintr(mut c: u8) {
         unsafe { procdump() };
     } else if c == ctrl_x(b'U') {
         // Kill line.
-        while console.edit_index != console.write_index && console.buffer[(console.edit_index - 1) % INPUT_BUF_SIZE] != b'\n' {
+        while console.edit_index != console.write_index
+            && console.buffer[(console.edit_index - 1) % INPUT_BUF_SIZE] != b'\n'
+        {
             console.edit_index -= 1;
             consputc(BACKSPACE);
         }
@@ -197,7 +191,10 @@ pub fn consoleintr(mut c: u8) {
         *console.edit_byte() = c;
         console.edit_index += 1;
 
-        if c == b'\n' || c == ctrl_x(b'D') || console.edit_index - console.read_index == INPUT_BUF_SIZE {
+        if c == b'\n'
+            || c == ctrl_x(b'D')
+            || console.edit_index - console.read_index == INPUT_BUF_SIZE
+        {
             // Wake up consoleread() if a whole line (or EOF) has arrived.
             console.write_index = console.edit_index;
             unsafe { wakeup(addr_of_mut!(console.read_index).cast()) };

@@ -43,6 +43,10 @@ pub const MIE_MSIE: u64 = 1 << 3;
 
 pub const SATP_SV39: u64 = 8 << 60;
 
+pub fn make_satp(pagetable: u64) -> u64 {
+    SATP_SV39 | (pagetable >> 12)
+}
+
 /// Bytes per page
 pub const PGSIZE: u64 = 4096;
 /// Bits of offset within a page

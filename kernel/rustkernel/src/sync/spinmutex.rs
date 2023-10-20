@@ -1,4 +1,8 @@
-use core::{cell::UnsafeCell, ops::{Deref, DerefMut, Drop}, sync::atomic::{AtomicBool, Ordering}};
+use core::{
+    cell::UnsafeCell,
+    ops::{Deref, DerefMut, Drop},
+    sync::atomic::{AtomicBool, Ordering},
+};
 
 pub struct SpinMutex<T> {
     locked: AtomicBool,
@@ -15,7 +19,7 @@ impl<T> SpinMutex<T> {
         while self.locked.swap(true, Ordering::Acquire) {
             core::hint::spin_loop();
         }
-        SpinMutexGuard { mutex: &self }
+        SpinMutexGuard { mutex: self }
     }
     pub unsafe fn unlock(&self) {
         self.locked.store(false, Ordering::Release);
@@ -30,7 +34,7 @@ impl<'m, T> Deref for SpinMutexGuard<'m, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { & *self.mutex.inner.get() }
+        unsafe { &*self.mutex.inner.get() }
     }
 }
 impl<'m, T> DerefMut for SpinMutexGuard<'m, T> {

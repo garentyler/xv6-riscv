@@ -16,9 +16,9 @@ pub(crate) mod param;
 pub mod printf;
 pub mod proc;
 pub(crate) mod riscv;
-pub mod sync;
 pub mod start;
 pub mod string;
+pub mod sync;
 pub mod syscall;
 pub mod sysproc;
 pub mod trap;
@@ -85,7 +85,7 @@ fn panic_wrapper(panic_info: &core::panic::PanicInfo) -> ! {
     }
 
     unsafe { crate::PANICKED = true };
-    
+
     loop {
         core::hint::spin_loop();
     }

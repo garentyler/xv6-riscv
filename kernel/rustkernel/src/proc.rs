@@ -90,7 +90,7 @@ impl Context {
 #[derive(Copy, Clone)]
 pub struct Cpu {
     pub proc: *mut Proc,
-        /// swtch() here to enter scheduler()
+    /// swtch() here to enter scheduler()
     pub context: Context,
     /// Depth of push_off() nesting.
     pub interrupt_disable_layers: i32,
@@ -239,10 +239,9 @@ pub unsafe extern "C" fn mycpu() -> *mut Cpu {
 /// Return the current struct proc *, or zero if none.
 #[no_mangle]
 pub unsafe extern "C" fn myproc() -> *mut Proc {
-    push_off();
+    let _ = crate::trap::InterruptBlocker::new();
     let c = mycpu();
     let p = (*c).proc;
-    pop_off();
     p
 }
 
@@ -499,4 +498,3 @@ pub unsafe extern "C" fn killed(p: *mut Proc) -> i32 {
     (*p).lock.unlock();
     k
 }
- 

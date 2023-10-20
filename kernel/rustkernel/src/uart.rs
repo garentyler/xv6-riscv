@@ -5,7 +5,7 @@ use crate::{
     console::consoleintr,
     proc::{sleep, sleep_mutex, wakeup},
     riscv::memlayout::UART0,
-    sync::spinlock::{pop_off, push_off, Spinlock},
+    sync::spinlock::Spinlock,
     sync::spinmutex::SpinMutex,
     trap::InterruptBlocker,
 };
@@ -22,15 +22,16 @@ enum Register {
 }
 impl Register {
     pub fn as_ptr(&self) -> *mut u8 {
-        let addr = UART0 + match self {
-            Register::ReceiveHolding => 0,
-            Register::TransmitHolding => 0,
-            Register::InterruptEnable => 1,
-            Register::FIFOControl => 2,
-            Register::InterruptStatus => 2,
-            Register::LineControl => 2,
-            Register::LineStatus => 5,
-        };
+        let addr = UART0
+            + match self {
+                Register::ReceiveHolding => 0,
+                Register::TransmitHolding => 0,
+                Register::InterruptEnable => 1,
+                Register::FIFOControl => 2,
+                Register::InterruptStatus => 2,
+                Register::LineControl => 2,
+                Register::LineStatus => 5,
+            };
         addr as *mut u8
     }
     pub fn read(&self) -> u8 {
@@ -53,9 +54,12 @@ pub struct Uart {
     pub read_index: usize,
 }
 impl Uart {
+    /// Alternate version of Uart::write_byte() that doesn't
+    /// use interrupts, for use by kernel printf() and
+    /// to echo characters. It spins waiting for the UART's
+    /// output register to be empty.
     pub fn write_byte_sync(x: u8) {
-        // let _ = InterruptBlocker::new();
-        unsafe { push_off(); }
+        let _ = InterruptBlocker::new();
 
         if unsafe { crate::PANICKED } {
             loop {
@@ -69,8 +73,6 @@ impl Uart {
         }
 
         Register::TransmitHolding.write(x);
-
-        unsafe { pop_off(); }
     }
     /// If the UART is idle, and a character is
     /// waiting in the transmit buffer, send it.
@@ -175,34 +177,10 @@ pub(crate) unsafe fn uartputc(c: u8) {
         );
     }
 
-    uart_tx_buf[(uart_tx_w % UART_TX_BUF_SIZE) as usize] = c;
+    uart_tx_buf[uart_tx_w % UART_TX_BUF_SIZE] = c;
     uart_tx_w += 1;
     uartstart();
     uart_tx_lock.unlock();
-}
-
-/// Alternate version of uartputc() that doesn't
-/// use interrupts, for use by kernel printf() and
-/// to echo characters. It spins waiting for the UART's
-/// output register to be empty.
-pub(crate) unsafe fn uartputc_sync(c: u8) {
-    push_off();
-    Uart::write_byte_sync(c);
-
-    // if crate::PANICKED {
-    //     loop {
-    //         core::hint::spin_loop();
-    //     }
-    // }
-
-    // // Wait for Transmit Holding Empty to be set in LSR.
-    // while Register::LineStatus.read() & LSR_TX_IDLE == 0 {
-    //     core::hint::spin_loop();
-    // }
-
-    // Register::TransmitHolding.write(c);
-
-    pop_off();
 }
 
 /// If the UART is idle, and a character is waiting
@@ -223,7 +201,7 @@ unsafe fn uartstart() {
         }
 
         // let buf = uart_tx_buf.lock();
-        let c = uart_tx_buf[(uart_tx_r % UART_TX_BUF_SIZE) as usize];
+        let c = uart_tx_buf[uart_tx_r % UART_TX_BUF_SIZE];
         uart_tx_r += 1;
 
         // Maybe uartputc() is waiting for space in the buffer.
@@ -248,12 +226,8 @@ pub(crate) fn uartgetc() -> Option<u8> {
 /// both. Called from devintr().
 pub(crate) unsafe fn uartintr() {
     // Read and process incoming characters.
-    loop {
-        if let Some(c) = uartgetc() {
-            consoleintr(c);
-        } else {
-            break;
-        }
+    while let Some(c) = uartgetc() {
+        consoleintr(c);
     }
 
     // Send buffered characters.

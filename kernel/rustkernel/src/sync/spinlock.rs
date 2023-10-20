@@ -57,7 +57,7 @@ impl Spinlock {
         }
 
         self.cpu = null_mut();
-        
+
         self.locked.store(false, Ordering::Release);
 
         pop_off();

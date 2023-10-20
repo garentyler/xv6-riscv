@@ -4,8 +4,8 @@
 
 use crate::{
     riscv::{memlayout::PHYSTOP, pg_round_up, PGSIZE},
-    sync::spinlock::Spinlock,
     string::memset,
+    sync::spinlock::Spinlock,
 };
 use core::{
     ffi::{c_char, CStr},
