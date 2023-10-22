@@ -65,7 +65,7 @@ LDFLAGS = -z max-page-size=4096
 
 $K/kernel: $(OBJS) $K/kernel.ld $U/initcode $R/src
 	cargo +nightly -Z unstable-options -C $R build --release
-	$(OBJDUMP) -S $R/target/$(TARGET_TRIPLE)/release/librustkernel.a > $R/target/$(TARGET_TRIPLE)/release/librustkernel.asm
+# $(OBJDUMP) -S $R/target/$(TARGET_TRIPLE)/release/librustkernel.a > $R/target/$(TARGET_TRIPLE)/release/librustkernel.asm
 	$(LD) $(LDFLAGS) -T $K/kernel.ld -o $K/kernel $(OBJS) $R/target/$(TARGET_TRIPLE)/release/librustkernel.a
 	$(OBJDUMP) -S $K/kernel > $K/kernel.asm
 	$(OBJDUMP) -t $K/kernel | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $K/kernel.sym

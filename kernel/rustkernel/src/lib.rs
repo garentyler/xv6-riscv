@@ -7,6 +7,7 @@
 extern crate alloc;
 extern crate core;
 
+pub mod bio;
 pub mod buf;
 pub mod console;
 pub mod file;
@@ -23,6 +24,7 @@ pub mod syscall;
 pub mod sysproc;
 pub mod trap;
 pub mod uart;
+pub mod virtio_disk;
 
 extern "C" {
     // pub fn printfinit();
@@ -33,7 +35,6 @@ extern "C" {
     pub fn binit();
     pub fn iinit();
     pub fn fileinit();
-    pub fn virtio_disk_init();
     pub fn userinit();
     // pub fn scheduler();
 }
@@ -61,7 +62,7 @@ pub unsafe extern "C" fn main() -> ! {
         binit();
         iinit();
         fileinit();
-        virtio_disk_init();
+        virtio_disk::virtio_disk_init();
         userinit();
         STARTED = true;
     } else {
@@ -79,10 +80,26 @@ pub unsafe extern "C" fn main() -> ! {
 #[panic_handler]
 fn panic_wrapper(panic_info: &core::panic::PanicInfo) -> ! {
     if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
-        crate::printf::print!("panic: {}\n", s);
+        crate::printf::print!("kernel panic: {}\n", s);
     } else {
         crate::printf::print!("kernel panic\n");
     }
+
+    // crate::printf::print!("  ______\n");
+    // crate::printf::print!("< fuck!! >\n");
+    // crate::printf::print!("  ------\n");
+    // crate::printf::print!("         \\   ^__^ \n");
+    // crate::printf::print!("          \\  (oo)\\_______\n");
+    // crate::printf::print!("             (__)\\       )\\/\\\\\n");
+    // crate::printf::print!("                 ||----w |\n");
+    // crate::printf::print!("                 ||     ||\n");
+
+    crate::printf::print!("███████╗██╗   ██╗ ██████╗██╗  ██╗██╗██╗\n");
+    crate::printf::print!("██╔════╝██║   ██║██╔════╝██║ ██╔╝██║██║\n");
+    crate::printf::print!("█████╗  ██║   ██║██║     █████╔╝ ██║██║\n");
+    crate::printf::print!("██╔══╝  ██║   ██║██║     ██╔═██╗ ╚═╝╚═╝\n");
+    crate::printf::print!("██║     ╚██████╔╝╚██████╗██║  ██╗██╗██╗\n");
+    crate::printf::print!("╚═╝      ╚═════╝  ╚═════╝╚═╝  ╚═╝╚═╝╚═╝\n");
 
     unsafe { crate::PANICKED = true };
 
