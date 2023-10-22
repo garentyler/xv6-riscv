@@ -14,7 +14,7 @@ pub struct PrintLock {
 
 macro_rules! print {
     ($($arg:tt)*) => {{
-        unsafe { $crate::printf::PRINT_LOCK.lock() };
+        unsafe { $crate::printf::PRINT_LOCK.lock_unguarded() };
 
         // Allocate a page of memory as the buffer and release it when we're done.
         let buf = unsafe { $crate::kalloc::kalloc() as *mut [u8; 4096] };

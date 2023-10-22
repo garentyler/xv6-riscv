@@ -73,7 +73,7 @@ pub unsafe extern "C" fn kfree(pa: *mut u8) {
 
     let run: *mut Run = pa.cast();
 
-    kmem.lock.lock();
+    kmem.lock.lock_unguarded();
     (*run).next = kmem.freelist;
     kmem.freelist = run;
     kmem.lock.unlock();
@@ -85,7 +85,7 @@ pub unsafe extern "C" fn kfree(pa: *mut u8) {
 /// Returns 0 if the memory cannot be allocated.
 #[no_mangle]
 pub unsafe extern "C" fn kalloc() -> *mut u8 {
-    kmem.lock.lock();
+    kmem.lock.lock_unguarded();
 
     let run = kmem.freelist;
     if !run.is_null() {

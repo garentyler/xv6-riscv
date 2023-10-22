@@ -36,7 +36,7 @@ impl Spinlock {
     pub fn held_by_current_cpu(&self) -> bool {
         self.cpu == unsafe { mycpu() } && self.locked.load(Ordering::Relaxed)
     }
-    pub unsafe fn lock(&mut self) {
+    pub unsafe fn lock_unguarded(&mut self) {
         push_off();
 
         if self.held_by_current_cpu() {
@@ -76,7 +76,7 @@ pub unsafe extern "C" fn holding(lock: *mut Spinlock) -> i32 {
 
 #[no_mangle]
 pub unsafe extern "C" fn acquire(lock: *mut Spinlock) {
-    (*lock).lock();
+    (*lock).lock_unguarded();
 }
 
 #[no_mangle]

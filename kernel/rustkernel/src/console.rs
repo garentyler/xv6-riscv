@@ -98,7 +98,6 @@ pub unsafe extern "C" fn consoleread(user_dst: i32, mut dst: u64, mut n: i32) ->
     let mut c;
     let mut cbuf;
 
-    // cons.lock.lock();
     let mut console = cons.lock();
 
     while n > 0 {
@@ -161,7 +160,6 @@ pub unsafe fn consoleinit() {
 /// Do erase/kill processing, then append to cons.buf.
 /// Wake up consoleread() if a whole line has arrived.
 pub fn consoleintr(mut c: u8) {
-    // cons.lock.lock();
     let mut console = cons.lock();
 
     if c == ctrl_x(b'P') {

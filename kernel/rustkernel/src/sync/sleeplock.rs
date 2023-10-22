@@ -22,7 +22,7 @@ pub unsafe extern "C" fn initsleeplock(lock: *mut Sleeplock, name: *mut c_char) 
 
 #[no_mangle]
 pub unsafe extern "C" fn acquiresleep(lock: *mut Sleeplock) {
-    (*lock).inner.lock();
+    (*lock).inner.lock_unguarded();
     while (*lock).locked > 0 {
         sleep(lock.cast(), addr_of_mut!((*lock).inner));
     }
@@ -33,7 +33,7 @@ pub unsafe extern "C" fn acquiresleep(lock: *mut Sleeplock) {
 
 #[no_mangle]
 pub unsafe extern "C" fn releasesleep(lock: *mut Sleeplock) {
-    (*lock).inner.lock();
+    (*lock).inner.lock_unguarded();
     (*lock).locked = 0;
     (*lock).pid = 0;
     wakeup(lock.cast());
@@ -42,7 +42,7 @@ pub unsafe extern "C" fn releasesleep(lock: *mut Sleeplock) {
 
 #[no_mangle]
 pub unsafe extern "C" fn holdingsleep(lock: *mut Sleeplock) -> i32 {
-    (*lock).inner.lock();
+    (*lock).inner.lock_unguarded();
     let holding = ((*lock).locked > 0) && ((*lock).pid == (*myproc()).pid);
     (*lock).inner.unlock();
     if holding {

@@ -158,9 +158,9 @@ pub(crate) unsafe fn uartinit() {
 /// from interrupts, it's only suitable for use
 /// by write().
 pub(crate) unsafe fn uartputc(c: u8) {
-    uart_tx_lock.lock();
-    // let mut buf = uart_tx_buf.lock();
-    // let u = uart.lock();
+    uart_tx_lock.lock_unguarded();
+    // let mut buf = uart_tx_buf.lock_unguarded();
+    // let u = uart.lock_unguarded();
 
     if crate::PANICKED {
         loop {
@@ -200,7 +200,7 @@ unsafe fn uartstart() {
             return;
         }
 
-        // let buf = uart_tx_buf.lock();
+        // let buf = uart_tx_buf.lock_unguarded();
         let c = uart_tx_buf[uart_tx_r % UART_TX_BUF_SIZE];
         uart_tx_r += 1;
 
@@ -231,7 +231,7 @@ pub(crate) unsafe fn uartintr() {
     }
 
     // Send buffered characters.
-    uart_tx_lock.lock();
+    uart_tx_lock.lock_unguarded();
     uartstart();
     uart_tx_lock.unlock();
 }

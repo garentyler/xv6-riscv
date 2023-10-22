@@ -45,7 +45,7 @@ pub unsafe extern "C" fn trapinithart() {
 
 #[no_mangle]
 pub unsafe extern "C" fn clockintr() {
-    tickslock.lock();
+    tickslock.lock_unguarded();
     ticks += 1;
     wakeup(addr_of_mut!(ticks).cast());
     tickslock.unlock();

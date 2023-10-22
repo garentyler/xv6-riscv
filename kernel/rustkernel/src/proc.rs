@@ -248,7 +248,7 @@ pub unsafe extern "C" fn myproc() -> *mut Proc {
 #[no_mangle]
 pub unsafe extern "C" fn allocpid() -> i32 {
     let lock = addr_of_mut!(pid_lock);
-    (*lock).lock();
+    (*lock).lock_unguarded();
     let pid = nextpid;
     nextpid += 1;
     (*lock).unlock();
@@ -265,7 +265,7 @@ pub unsafe extern "C" fn allocpid() -> i32 {
 pub unsafe extern "C" fn allocproc() -> *mut Proc {
     for p in &mut proc {
         let lock = addr_of_mut!(p.lock);
-        (*lock).lock();
+        (*lock).lock_unguarded();
 
         if p.state != ProcState::Unused {
             (*lock).unlock();
@@ -331,7 +331,7 @@ pub unsafe extern "C" fn freeproc(p: *mut Proc) {
 //         let p: *mut Proc = addr_of_mut!(*p);
 //
 //         if p != myproc() {
-//             (*p).lock.lock();
+//             (*p).lock.lock_unguarded();
 //             if (*p).state == ProcState::Sleeping && (*p).chan == chan {
 //                 (*p).state = ProcState::Runnable;
 //             }
@@ -375,7 +375,7 @@ pub unsafe extern "C" fn growproc(n: i32) -> i32 {
 #[no_mangle]
 pub unsafe extern "C" fn r#yield() {
     let p = myproc();
-    (*p).lock.lock();
+    (*p).lock.lock_unguarded();
     (*p).state = ProcState::Runnable;
     sched();
     (*p).lock.unlock();
@@ -421,7 +421,7 @@ pub unsafe extern "C" fn sleep(chan: *mut c_void, lock: *mut Spinlock) {
     // (wakeup locks p->lock),
     // so it's okay to release lk.
 
-    (*p).lock.lock();
+    (*p).lock.lock_unguarded();
     (*lock).unlock();
 
     // Go to sleep.
@@ -435,14 +435,14 @@ pub unsafe extern "C" fn sleep(chan: *mut c_void, lock: *mut Spinlock) {
 
     // Reacquire original lock.
     (*p).lock.unlock();
-    (*lock).lock();
+    (*lock).lock_unguarded();
 }
 
 pub unsafe fn sleep_mutex<T>(chan: *mut c_void, mutex: &mut SpinMutexGuard<T>) {
     let p = myproc();
     let mutex = mutex.mutex;
 
-    (*p).lock.lock();
+    (*p).lock.lock_unguarded();
     mutex.unlock();
 
     // Go to sleep.
@@ -466,7 +466,7 @@ pub unsafe fn sleep_mutex<T>(chan: *mut c_void, mutex: &mut SpinMutexGuard<T>) {
 #[no_mangle]
 pub unsafe extern "C" fn kill(pid: i32) -> i32 {
     for p in &mut proc {
-        p.lock.lock();
+        p.lock.lock_unguarded();
 
         if p.pid == pid {
             p.killed = 1;
@@ -486,14 +486,14 @@ pub unsafe extern "C" fn kill(pid: i32) -> i32 {
 
 #[no_mangle]
 pub unsafe extern "C" fn setkilled(p: *mut Proc) {
-    (*p).lock.lock();
+    (*p).lock.lock_unguarded();
     (*p).killed = 1;
     (*p).lock.unlock();
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn killed(p: *mut Proc) -> i32 {
-    (*p).lock.lock();
+    (*p).lock.lock_unguarded();
     let k = (*p).killed;
     (*p).lock.unlock();
     k
