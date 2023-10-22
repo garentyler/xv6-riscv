@@ -108,6 +108,8 @@ pub unsafe extern "C" fn consoleread(user_dst: i32, mut dst: u64, mut n: i32) ->
                 // cons.lock.unlock();
                 return -1;
             }
+            // let channel = addr_of_mut!(console.read_index).cast();
+            // console.sleep(channel);
             sleep_mutex(addr_of_mut!(console.read_index).cast(), &mut console);
         }
 

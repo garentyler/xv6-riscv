@@ -4,7 +4,7 @@ use crate::{
 };
 use core::{
     ffi::c_char,
-    ptr::{null_mut, addr_of},
+    ptr::{addr_of, null_mut},
     sync::atomic::{AtomicBool, Ordering},
 };
 

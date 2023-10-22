@@ -4,7 +4,7 @@ use crate::{
     kalloc::kfree,
     param::*,
     riscv::{self, Pagetable, PTE_W},
-    sync::spinlock::{pop_off, push_off, Spinlock},
+    sync::spinlock::Spinlock,
     sync::spinmutex::SpinMutexGuard,
 };
 use core::{
@@ -241,8 +241,7 @@ pub unsafe extern "C" fn mycpu() -> *mut Cpu {
 pub unsafe extern "C" fn myproc() -> *mut Proc {
     let _ = crate::trap::InterruptBlocker::new();
     let c = mycpu();
-    let p = (*c).proc;
-    p
+    (*c).proc
 }
 
 #[no_mangle]
@@ -408,7 +407,7 @@ pub unsafe extern "C" fn sched() {
 /// Atomically release lock and sleep on chan.
 /// Reacquires lock when awakened.
 #[no_mangle]
-pub unsafe extern "C" fn sleep(chan: *mut c_void, lock: *mut Spinlock) {
+pub unsafe extern "C" fn sleep_lock(chan: *mut c_void, lock: *mut Spinlock) {
     let p = myproc();
 
     // Must acquire p->lock in order to
@@ -455,6 +454,20 @@ pub unsafe fn sleep_mutex<T>(chan: *mut c_void, mutex: &mut SpinMutexGuard<T>) {
     core::mem::forget(guard);
 }
 
+// pub unsafe fn sleep(chan: *mut c_void) {
+//     let p = myproc();
+//     let _guard = (*p).lock.lock();
+//
+//     // Go to sleep.
+//     (*p).chan = chan;
+//     (*p).state = ProcState::Sleeping;
+//
+//     sched();
+//
+//     // Clean up.
+//     (*p).chan = null_mut();
+// }
+
 /// Kill the process with the given pid.
 /// The victim won't exit until it tries to return
 /// to user space (see usertrap() in trap.c).
@@ -486,6 +499,5 @@ pub unsafe extern "C" fn setkilled(p: *mut Proc) {
 #[no_mangle]
 pub unsafe extern "C" fn killed(p: *mut Proc) -> i32 {
     let _guard = (*p).lock.lock();
-    let k = (*p).killed;
-    k
+    (*p).killed
 }

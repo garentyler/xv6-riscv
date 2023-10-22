@@ -1,12 +1,12 @@
 //! Virtio device driver.
-//! 
+//!
 //! For both the MMIO interface, and virtio descriptors.
 //! Only tested with qemu.
-//! 
+//!
 //! The virtio spec: https://docs.oasis-open.org/virtio/virtio/v1.1/virtio-v1.1.pdf
 //! qemu ... -drive file=fs.img,if=none,format=raw,id=x0 -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
 
-use crate::{sync::spinlock::Spinlock, buf::Buffer};
+use crate::{buf::Buffer, sync::spinlock::Spinlock};
 use core::ffi::c_char;
 
 // Virtio MMIO control registers, mapped starting at 0x10001000
@@ -17,61 +17,61 @@ pub const VIRTIO_MMIO_MAGIC_VALUE: u64 = 0x000u64;
 /// Version - should be 2.
 pub const VIRTIO_MMIO_VERSION: u64 = 0x004u64;
 /// Device type.
-/// 
+///
 /// 1: Network
 /// 2: Disk
-pub const VIRTIO_MMIO_DEVICE_ID: u64		= 0x008u64;
+pub const VIRTIO_MMIO_DEVICE_ID: u64 = 0x008u64;
 /// 0x554d4551
-pub const VIRTIO_MMIO_VENDOR_ID: u64		= 0x00cu64;
-pub const VIRTIO_MMIO_DEVICE_FEATURES: u64	= 0x010u64;
-pub const VIRTIO_MMIO_DRIVER_FEATURES: u64	= 0x020u64;
+pub const VIRTIO_MMIO_VENDOR_ID: u64 = 0x00cu64;
+pub const VIRTIO_MMIO_DEVICE_FEATURES: u64 = 0x010u64;
+pub const VIRTIO_MMIO_DRIVER_FEATURES: u64 = 0x020u64;
 /// Select queue, write-only.
-pub const VIRTIO_MMIO_QUEUE_SEL: u64		= 0x030u64;
+pub const VIRTIO_MMIO_QUEUE_SEL: u64 = 0x030u64;
 /// Max size of current queue, read-only.
-pub const VIRTIO_MMIO_QUEUE_NUM_MAX: u64	= 0x034u64;
+pub const VIRTIO_MMIO_QUEUE_NUM_MAX: u64 = 0x034u64;
 /// Size of current queue, write-only.
-pub const VIRTIO_MMIO_QUEUE_NUM: u64		= 0x038u64;
+pub const VIRTIO_MMIO_QUEUE_NUM: u64 = 0x038u64;
 /// Ready bit.
-pub const VIRTIO_MMIO_QUEUE_READY: u64		= 0x044u64;
+pub const VIRTIO_MMIO_QUEUE_READY: u64 = 0x044u64;
 /// Write-only.
-pub const VIRTIO_MMIO_QUEUE_NOTIFY: u64	= 0x050u64;
+pub const VIRTIO_MMIO_QUEUE_NOTIFY: u64 = 0x050u64;
 /// Read-only.
-pub const VIRTIO_MMIO_INTERRUPT_STATUS: u64	= 0x060u64;
+pub const VIRTIO_MMIO_INTERRUPT_STATUS: u64 = 0x060u64;
 /// Write-only.
-pub const VIRTIO_MMIO_INTERRUPT_ACK: u64	= 0x064u64;
+pub const VIRTIO_MMIO_INTERRUPT_ACK: u64 = 0x064u64;
 /// Read/write.
-pub const VIRTIO_MMIO_STATUS: u64		= 0x070u64;
+pub const VIRTIO_MMIO_STATUS: u64 = 0x070u64;
 /// Physical address for descriptor table, write-only.
-pub const VIRTIO_MMIO_QUEUE_DESC_LOW: u64	= 0x080u64;
-pub const VIRTIO_MMIO_QUEUE_DESC_HIGH: u64	= 0x084u64;
+pub const VIRTIO_MMIO_QUEUE_DESC_LOW: u64 = 0x080u64;
+pub const VIRTIO_MMIO_QUEUE_DESC_HIGH: u64 = 0x084u64;
 /// Physical address for available ring, write-only.
-pub const VIRTIO_MMIO_DRIVER_DESC_LOW: u64	= 0x090u64;
-pub const VIRTIO_MMIO_DRIVER_DESC_HIGH: u64	= 0x094u64;
+pub const VIRTIO_MMIO_DRIVER_DESC_LOW: u64 = 0x090u64;
+pub const VIRTIO_MMIO_DRIVER_DESC_HIGH: u64 = 0x094u64;
 /// Physical address for used ring, write-only.
-pub const VIRTIO_MMIO_DEVICE_DESC_LOW: u64	= 0x0a0u64;
-pub const VIRTIO_MMIO_DEVICE_DESC_HIGH: u64	= 0x0a4u64;
+pub const VIRTIO_MMIO_DEVICE_DESC_LOW: u64 = 0x0a0u64;
+pub const VIRTIO_MMIO_DEVICE_DESC_HIGH: u64 = 0x0a4u64;
 
 // Status register bits, from qemu virtio_config.h.
-pub const VIRTIO_CONFIG_S_ACKNOWLEDGE: u8	= 0x01u8;
-pub const VIRTIO_CONFIG_S_DRIVER: u8		= 0x02u8;
-pub const VIRTIO_CONFIG_S_DRIVER_OK: u8	= 0x04u8;
-pub const VIRTIO_CONFIG_S_FEATURES_OK: u8	= 0x08u8;
+pub const VIRTIO_CONFIG_S_ACKNOWLEDGE: u8 = 0x01u8;
+pub const VIRTIO_CONFIG_S_DRIVER: u8 = 0x02u8;
+pub const VIRTIO_CONFIG_S_DRIVER_OK: u8 = 0x04u8;
+pub const VIRTIO_CONFIG_S_FEATURES_OK: u8 = 0x08u8;
 
 // Device feature bits
 /// Disk is read-only.
-pub const VIRTIO_BLK_F_RO: u8               = 5u8;
+pub const VIRTIO_BLK_F_RO: u8 = 5u8;
 /// Supports SCSI command passthrough.
-pub const VIRTIO_BLK_F_SCSI: u8             = 7u8;
+pub const VIRTIO_BLK_F_SCSI: u8 = 7u8;
 /// Writeback mode available in config.
-pub const VIRTIO_BLK_F_CONFIG_WCE: u8      = 11u8;
+pub const VIRTIO_BLK_F_CONFIG_WCE: u8 = 11u8;
 /// Support more than one vq.
-pub const VIRTIO_BLK_F_MQ: u8              = 12u8;
-pub const VIRTIO_F_ANY_LAYOUT: u8          = 27u8;
-pub const VIRTIO_RING_F_INDIRECT_DESC: u8  = 28u8;
-pub const VIRTIO_RING_F_EVENT_IDX: u8      = 29u8;
+pub const VIRTIO_BLK_F_MQ: u8 = 12u8;
+pub const VIRTIO_F_ANY_LAYOUT: u8 = 27u8;
+pub const VIRTIO_RING_F_INDIRECT_DESC: u8 = 28u8;
+pub const VIRTIO_RING_F_EVENT_IDX: u8 = 29u8;
 
 /// This many virtio descriptors.
-/// 
+///
 /// Must be a power of two.
 pub const NUM_DESCRIPTORS: usize = 8usize;
 
@@ -123,12 +123,12 @@ pub struct VirtqUsed {
 // Described in section 5.2 of the spec.
 
 /// Read the disk.
-pub const VIRTIO_BLK_T_IN: u32  = 0u32;
+pub const VIRTIO_BLK_T_IN: u32 = 0u32;
 /// Write the disk.
 pub const VIRTIO_BLK_T_OUT: u32 = 1u32;
 
 /// The format of the first descriptor in a disk request.
-/// 
+///
 /// To be followed by two more descriptors containing
 /// the block, and a one-byte status.
 #[repr(C)]
@@ -151,7 +151,7 @@ pub struct Disk {
     /// A set (not a ring) of DMA descriptors, with which the
     /// driver tells the device where to read and write individual
     /// disk operations. There are NUM descriptors.
-    /// 
+    ///
     /// Most commands consist of a "chain" (linked list)
     /// of a couple of these descriptors.
     pub descriptors: *mut VirtqDescriptor,
@@ -173,10 +173,9 @@ pub struct Disk {
 
     /// Track info about in-flight operations,
     /// for use when completion interrupt arrives.
-    /// 
+    ///
     /// Indexed by first descriptor index of chain.
     pub info: [DiskInfo; NUM_DESCRIPTORS],
-
 
     /// Disk command headers.
     /// One-for-one with descriptors, for convenience.

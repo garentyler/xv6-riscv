@@ -3,7 +3,7 @@
 
 use crate::{
     console::consoleintr,
-    proc::{sleep, sleep_mutex, wakeup},
+    proc::{sleep_lock, wakeup},
     riscv::memlayout::UART0,
     sync::spinlock::Spinlock,
     sync::spinmutex::SpinMutex,
@@ -171,7 +171,7 @@ pub(crate) unsafe fn uartputc(c: u8) {
     while uart_tx_w == uart_tx_r + UART_TX_BUF_SIZE {
         // Buffer is full.
         // Wait for uartstart() to open up space in the buffer.
-        sleep(
+        sleep_lock(
             addr_of_mut!(uart_tx_r).cast(),
             addr_of_mut!(uart_tx_lock).cast(),
         );

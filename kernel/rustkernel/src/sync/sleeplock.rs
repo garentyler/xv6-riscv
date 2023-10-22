@@ -1,8 +1,11 @@
 use crate::{
-    proc::{myproc, sleep, wakeup},
-    sync::spinlock::{self, Spinlock},
+    proc::{myproc, sleep_lock, wakeup},
+    sync::spinlock::Spinlock,
 };
-use core::{ffi::c_char, ptr::{addr_of, null_mut}};
+use core::{
+    ffi::c_char,
+    ptr::{addr_of, null_mut},
+};
 
 #[repr(C)]
 pub struct Sleeplock {
@@ -31,12 +34,16 @@ impl Sleeplock {
     }
     /// Check whether this proc is holding the lock.
     pub fn held_by_current_proc(&self) -> bool {
-        self.locked > 0 && self.pid == unsafe { (*myproc()).pid } 
-    } 
+        self.locked > 0 && self.pid == unsafe { (*myproc()).pid }
+    }
+    #[allow(clippy::while_immutable_condition)]
     pub unsafe fn lock_unguarded(&self) {
         let _guard = self.inner.lock();
         while self.locked > 0 {
-            sleep(addr_of!(*self).cast_mut().cast(), addr_of!(self.inner).cast_mut().cast());
+            sleep_lock(
+                addr_of!(*self).cast_mut().cast(),
+                addr_of!(self.inner).cast_mut().cast(),
+            );
         }
         let this: &mut Self = &mut *addr_of!(*self).cast_mut();
         this.locked = 1;

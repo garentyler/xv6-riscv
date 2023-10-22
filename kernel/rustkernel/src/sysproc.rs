@@ -1,5 +1,5 @@
 use crate::{
-    proc::{exit, fork, growproc, kill, killed, myproc, sleep, wait},
+    proc::{exit, fork, growproc, kill, killed, myproc, sleep_lock, wait},
     syscall::{argaddr, argint},
 };
 use core::ptr::addr_of_mut;
@@ -53,7 +53,7 @@ pub unsafe extern "C" fn sys_sleep() -> u64 {
             crate::trap::tickslock.unlock();
             return -1i64 as u64;
         }
-        sleep(
+        sleep_lock(
             addr_of_mut!(crate::trap::ticks).cast(),
             addr_of_mut!(crate::trap::tickslock).cast(),
         )
