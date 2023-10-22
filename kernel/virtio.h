@@ -7,6 +7,8 @@
 // https://docs.oasis-open.org/virtio/virtio/v1.1/virtio-v1.1.pdf
 //
 
+#include "types.h"
+
 // virtio mmio control registers, mapped starting at 0x10001000.
 // from qemu virtio_mmio.h
 #define VIRTIO_MMIO_MAGIC_VALUE		0x000 // 0x74726976

@@ -1,4 +1,5 @@
 #ifndef __ASSEMBLER__
+#pragma once
 
 #include "./types.h"
 
