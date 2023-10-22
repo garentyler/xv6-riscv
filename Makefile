@@ -130,6 +130,7 @@ UPROGS=\
 	$P/_usertests\
 	$P/_wc\
 	$P/_zombie\
+	$P/_shutdown\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

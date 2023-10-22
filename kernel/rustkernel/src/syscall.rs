@@ -1,7 +1,7 @@
 use crate::{
     console::printf::print,
     proc::{self, myproc, sleep_lock},
-    riscv::Pagetable,
+    riscv::{Pagetable, memlayout::QEMU_POWER},
     string::strlen,
 };
 use core::{mem::size_of, ptr::addr_of_mut};
@@ -47,6 +47,7 @@ pub enum Syscall {
     Link,
     Mkdir,
     Close,
+    Shutdown,
 }
 impl Syscall {
     pub unsafe fn call(&self) -> u64 {
@@ -113,6 +114,11 @@ impl Syscall {
             Syscall::Link => sys_link(),
             Syscall::Mkdir => sys_mkdir(),
             Syscall::Close => sys_close(),
+            Syscall::Shutdown => {
+                let qemu_power = QEMU_POWER as usize as *mut u32;
+                qemu_power.write_volatile(0x5555u32);
+                panic!("shutdown");
+            }
         }
     }
 }
@@ -142,6 +148,7 @@ impl TryFrom<usize> for Syscall {
             19 => Ok(Syscall::Link),
             20 => Ok(Syscall::Mkdir),
             21 => Ok(Syscall::Close),
+            22 => Ok(Syscall::Shutdown),
             _ => Err(()),
         }
     }
@@ -170,6 +177,7 @@ impl From<Syscall> for usize {
             Syscall::Link => 19,
             Syscall::Mkdir => 20,
             Syscall::Close => 21,
+            Syscall::Shutdown => 22,
         }
     }
 }
