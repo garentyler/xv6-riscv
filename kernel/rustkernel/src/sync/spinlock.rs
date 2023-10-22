@@ -52,6 +52,12 @@ impl Spinlock {
         // The lock is now locked and we can write our CPU info.
         this.cpu = mycpu();
     }
+    pub fn lock(&self) -> SpinlockGuard<'_> {
+        unsafe {
+            self.lock_unguarded();
+        }
+        SpinlockGuard { lock: self }
+    }
     pub unsafe fn unlock(&self) {
         if !self.held_by_current_cpu() {
             panic!("Attempt to release lock from different CPU");
@@ -63,6 +69,15 @@ impl Spinlock {
         this.locked.store(false, Ordering::Release);
 
         pop_off();
+    }
+}
+
+pub struct SpinlockGuard<'l> {
+    pub lock: &'l Spinlock,
+}
+impl<'l> Drop for SpinlockGuard<'l> {
+    fn drop(&mut self) {
+        unsafe { self.lock.unlock() }
     }
 }
 

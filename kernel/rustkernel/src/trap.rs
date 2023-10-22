@@ -45,10 +45,9 @@ pub unsafe extern "C" fn trapinithart() {
 
 #[no_mangle]
 pub unsafe extern "C" fn clockintr() {
-    tickslock.lock_unguarded();
+    let _guard = tickslock.lock();
     ticks += 1;
     wakeup(addr_of_mut!(ticks).cast());
-    tickslock.unlock();
 }
 
 /// Check if it's an external interrupt or software interrupt and handle it.

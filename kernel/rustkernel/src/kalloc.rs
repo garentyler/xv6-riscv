@@ -73,10 +73,9 @@ pub unsafe extern "C" fn kfree(pa: *mut u8) {
 
     let run: *mut Run = pa.cast();
 
-    kmem.lock.lock_unguarded();
+    let _guard = kmem.lock.lock();
     (*run).next = kmem.freelist;
     kmem.freelist = run;
-    kmem.lock.unlock();
 }
 
 /// Allocate one 4096-byte page of physical memory.
@@ -85,14 +84,12 @@ pub unsafe extern "C" fn kfree(pa: *mut u8) {
 /// Returns 0 if the memory cannot be allocated.
 #[no_mangle]
 pub unsafe extern "C" fn kalloc() -> *mut u8 {
-    kmem.lock.lock_unguarded();
+    let _guard = kmem.lock.lock();
 
     let run = kmem.freelist;
     if !run.is_null() {
         kmem.freelist = (*run).next;
     }
-
-    kmem.lock.unlock();
 
     if !run.is_null() {
         memset(run.cast(), 0, PGSIZE as u32);

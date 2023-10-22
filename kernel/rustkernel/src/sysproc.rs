@@ -46,7 +46,7 @@ pub unsafe extern "C" fn sys_sleep() -> u64 {
     let mut n = 0i32;
     argint(0, addr_of_mut!(n));
 
-    crate::trap::tickslock.lock_unguarded();
+    let _guard = crate::trap::tickslock.lock();
     let ticks = crate::trap::ticks;
     while crate::trap::ticks < ticks + n as u32 {
         if killed(myproc()) > 0 {
@@ -58,7 +58,6 @@ pub unsafe extern "C" fn sys_sleep() -> u64 {
             addr_of_mut!(crate::trap::tickslock).cast(),
         )
     }
-    crate::trap::tickslock.unlock();
     0
 }
 
@@ -72,8 +71,7 @@ pub unsafe extern "C" fn sys_kill() -> u64 {
 /// Returns how many clock tick interrupts have occurred since start.
 #[no_mangle]
 pub unsafe extern "C" fn sys_uptime() -> u64 {
-    crate::trap::tickslock.lock_unguarded();
+    let _guard = crate::trap::tickslock.lock();
     let ticks = crate::trap::ticks;
-    crate::trap::tickslock.unlock();
     ticks as u64
 }

@@ -34,22 +34,35 @@ impl Sleeplock {
         self.locked > 0 && self.pid == unsafe { (*myproc()).pid } 
     } 
     pub unsafe fn lock_unguarded(&self) {
-        self.inner.lock_unguarded();
+        let _guard = self.inner.lock();
         while self.locked > 0 {
             sleep(addr_of!(*self).cast_mut().cast(), addr_of!(self.inner).cast_mut().cast());
         }
         let this: &mut Self = &mut *addr_of!(*self).cast_mut();
         this.locked = 1;
         this.pid = (*myproc()).pid;
-        self.inner.unlock();
+    }
+    pub fn lock(&self) -> SleeplockGuard<'_> {
+        unsafe {
+            self.lock_unguarded();
+        }
+        SleeplockGuard { lock: self }
     }
     pub unsafe fn unlock(&self) {
-        self.inner.lock_unguarded();
+        let _guard = self.inner.lock();
         let this: &mut Self = &mut *addr_of!(*self).cast_mut();
         this.locked = 0;
         this.pid = 0;
         wakeup(addr_of!(*self).cast_mut().cast());
-        self.inner.unlock();
+    }
+}
+
+pub struct SleeplockGuard<'l> {
+    pub lock: &'l Sleeplock,
+}
+impl<'l> Drop for SleeplockGuard<'l> {
+    fn drop(&mut self) {
+        unsafe { self.lock.unlock() }
     }
 }
 
