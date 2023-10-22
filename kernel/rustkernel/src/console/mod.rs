@@ -46,6 +46,14 @@ impl Console {
         &mut self.buffer[i]
     }
 }
+impl core::fmt::Write for Console {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        for b in s.as_bytes() {
+            Uart::write_byte_sync(*b);
+        }
+        core::fmt::Result::Ok(())
+    }
+}
 
 #[no_mangle]
 pub static cons: SpinMutex<Console> = SpinMutex::new(Console {

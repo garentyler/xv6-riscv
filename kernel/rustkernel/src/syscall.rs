@@ -1,7 +1,7 @@
 use crate::{
     console::printf::print,
     proc::{self, myproc, sleep_lock},
-    riscv::{Pagetable, memlayout::QEMU_POWER},
+    riscv::{memlayout::QEMU_POWER, Pagetable},
     string::strlen,
 };
 use core::{mem::size_of, ptr::addr_of_mut};

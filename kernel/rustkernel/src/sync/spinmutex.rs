@@ -1,5 +1,6 @@
 use core::{
     cell::UnsafeCell,
+    convert::{AsMut, AsRef},
     ops::{Deref, DerefMut, Drop},
     sync::atomic::{AtomicBool, Ordering},
 };
@@ -40,6 +41,16 @@ impl<'m, T> Deref for SpinMutexGuard<'m, T> {
 impl<'m, T> DerefMut for SpinMutexGuard<'m, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe { &mut *self.mutex.inner.get() }
+    }
+}
+impl<'m, T> AsRef<T> for SpinMutexGuard<'m, T> {
+    fn as_ref(&self) -> &T {
+        self.deref()
+    }
+}
+impl<'m, T> AsMut<T> for SpinMutexGuard<'m, T> {
+    fn as_mut(&mut self) -> &mut T {
+        self.deref_mut()
     }
 }
 impl<'m, T> Drop for SpinMutexGuard<'m, T> {

@@ -3,6 +3,7 @@
 #![allow(dead_code)]
 #![allow(clippy::missing_safety_doc)]
 #![feature(negative_impls)]
+#![feature(panic_info_message)]
 
 extern crate alloc;
 extern crate core;
@@ -88,20 +89,21 @@ pub unsafe extern "C" fn main() -> ! {
 
 #[panic_handler]
 fn panic_wrapper(panic_info: &core::panic::PanicInfo) -> ! {
-    if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
-        print!("kernel panic: {}\n", s);
+    if let Some(location) = panic_info.location() {
+        print!("kernel panic ({}): ", location.file());
     } else {
-        print!("kernel panic\n");
+        print!("kernel panic: ");
     }
 
-    // crate::printf::print!("  ______\n");
-    // crate::printf::print!("< fuck!! >\n");
-    // crate::printf::print!("  ------\n");
-    // crate::printf::print!("         \\   ^__^ \n");
-    // crate::printf::print!("          \\  (oo)\\_______\n");
-    // crate::printf::print!("             (__)\\       )\\/\\\\\n");
-    // crate::printf::print!("                 ||----w |\n");
-    // crate::printf::print!("                 ||     ||\n");
+    if let Some(s) = panic_info.message() {
+        print!("{}\n", s);
+    } else if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
+        print!("{}\n", s);
+    } else if let Some(s) = panic_info.payload().downcast_ref::<&CStr>() {
+        print!("{:?}\n", s);
+    } else {
+        print!("could not recover error message\n");
+    }
 
     print!("███████╗██╗   ██╗ ██████╗██╗  ██╗██╗██╗\n");
     print!("██╔════╝██║   ██║██╔════╝██║ ██╔╝██║██║\n");
@@ -110,7 +112,11 @@ fn panic_wrapper(panic_info: &core::panic::PanicInfo) -> ! {
     print!("██║     ╚██████╔╝╚██████╗██║  ██╗██╗██╗\n");
     print!("╚═╝      ╚═════╝  ╚═════╝╚═╝  ╚═╝╚═╝╚═╝\n");
 
-    unsafe { crate::PANICKED = true };
+    unsafe {
+        crate::PANICKED = true;
+        // Quit QEMU for convenience.
+        crate::syscall::Syscall::Shutdown.call();
+    }
 
     loop {
         core::hint::spin_loop();
@@ -118,7 +124,8 @@ fn panic_wrapper(panic_info: &core::panic::PanicInfo) -> ! {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn panic(s: *const c_char) -> ! {
-    let s = CStr::from_ptr(s).to_str().unwrap_or("panic from c");
-    panic!("{}", s);
+pub unsafe extern "C" fn panic(_: *const c_char) -> ! {
+    panic!("panic from c");
+    // let s = CStr::from_ptr(s).to_str().unwrap_or("panic from c");
+    // panic!("{:?}", CStr::from_ptr(s));
 }
