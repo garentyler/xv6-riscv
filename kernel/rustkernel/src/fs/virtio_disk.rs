@@ -6,7 +6,7 @@
 //! The virtio spec: https://docs.oasis-open.org/virtio/virtio/v1.1/virtio-v1.1.pdf
 //! qemu ... -drive file=fs.img,if=none,format=raw,id=x0 -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
 
-use crate::{buf::Buffer, sync::spinlock::Spinlock};
+use crate::{io::buf::Buffer, sync::spinlock::Spinlock};
 use core::ffi::c_char;
 
 // Virtio MMIO control registers, mapped starting at 0x10001000

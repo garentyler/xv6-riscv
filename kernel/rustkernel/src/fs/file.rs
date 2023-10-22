@@ -5,7 +5,8 @@ pub struct Devsw {
 }
 
 extern "C" {
-    pub static mut devsw: [Devsw; crate::param::NDEV];
+    pub static mut devsw: [Devsw; crate::NDEV];
+    pub fn fileinit();
 }
 
 pub const CONSOLE: usize = 1;

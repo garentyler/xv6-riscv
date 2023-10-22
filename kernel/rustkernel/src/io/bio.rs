@@ -13,7 +13,7 @@
 //! - Only one process at a time can use a buffer,
 //!   so do not keep them longer than necessary.
 
-use crate::{buf::Buffer, param::NBUF, sync::spinlock::Spinlock};
+use crate::{io::buf::Buffer, sync::spinlock::Spinlock, NBUF};
 
 pub struct BufferCache {
     pub buffers: [Buffer; NBUF],

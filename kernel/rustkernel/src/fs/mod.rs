@@ -1,6 +1,10 @@
 //! On-disk file system forma.
 //! Both the kernel and user programs use this header file.
 
+pub mod file;
+pub mod ramdisk;
+pub mod virtio_disk;
+
 // Root inode
 pub const ROOTINO: u64 = 1;
 /// Block size.
@@ -76,4 +80,8 @@ pub const DIRSIZ: usize = 14;
 pub struct DirectoryEntry {
     pub inum: u16,
     pub name: [u8; DIRSIZ],
+}
+
+extern "C" {
+    pub fn iinit();
 }

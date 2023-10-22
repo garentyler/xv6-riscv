@@ -87,7 +87,7 @@ pipewrite(struct pipe *pi, uint64 addr, int n)
     }
     if(pi->nwrite == pi->nread + PIPESIZE){ //DOC: pipewrite-full
       wakeup(&pi->nread);
-      sleep(&pi->nwrite, &pi->lock);
+      sleep_lock(&pi->nwrite, &pi->lock);
     } else {
       char ch;
       if(copyin(pr->pagetable, &ch, addr + i, 1) == -1)
@@ -115,7 +115,7 @@ piperead(struct pipe *pi, uint64 addr, int n)
       release(&pi->lock);
       return -1;
     }
-    sleep(&pi->nread, &pi->lock); //DOC: piperead-sleep
+    sleep_lock(&pi->nread, &pi->lock); // DOC: piperead-sleep
   }
   for(i = 0; i < n; i++){  //DOC: piperead-copy
     if(pi->nread == pi->nwrite)

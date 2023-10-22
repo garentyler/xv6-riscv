@@ -1,5 +1,5 @@
 use crate::{
-    printf::print,
+    console::printf::print,
     proc::{cpuid, exit, killed, mycpu, myproc, r#yield, setkilled, wakeup, ProcState},
     riscv::*,
     sync::spinlock::Spinlock,
@@ -64,7 +64,7 @@ pub unsafe extern "C" fn devintr() -> i32 {
         let irq = plic::plic_claim();
 
         if irq == UART0_IRQ {
-            crate::uart::uartintr();
+            crate::console::uart::uartintr();
         } else if irq == VIRTIO0_IRQ {
             virtio_disk_intr();
         } else if irq > 0 {

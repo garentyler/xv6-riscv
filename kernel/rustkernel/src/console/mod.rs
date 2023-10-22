@@ -8,13 +8,16 @@
 // - ctrl-d: end of file
 // - ctrl-p: print process list
 
+pub mod printf;
+pub mod uart;
+
 use crate::{
-    file::{devsw, CONSOLE},
+    fs::file::{devsw, CONSOLE},
     proc::{killed, myproc, procdump, sleep_mutex, wakeup},
     sync::spinmutex::SpinMutex,
-    uart::{uartinit, uartputc, Uart},
 };
 use core::{ffi::c_void, ptr::addr_of_mut};
+use uart::{uartinit, uartputc, Uart};
 
 extern "C" {
     fn either_copyin(dst: *mut c_void, user_src: i32, src: u64, len: u64) -> i32;

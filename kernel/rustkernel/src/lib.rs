@@ -7,69 +7,78 @@
 extern crate alloc;
 extern crate core;
 
-pub mod bio;
-pub mod buf;
 pub mod console;
-pub mod file;
 pub mod fs;
-pub(crate) mod kalloc;
-pub(crate) mod param;
-pub mod printf;
+pub mod io;
+pub mod mem;
 pub mod proc;
 pub(crate) mod riscv;
 pub mod start;
 pub mod string;
 pub mod sync;
 pub mod syscall;
-pub mod sysproc;
 pub mod trap;
-pub mod uart;
-pub mod virtio_disk;
 
-extern "C" {
-    // pub fn printfinit();
-    // pub fn kinit();
-    pub fn kvminit();
-    pub fn kvminithart();
-    pub fn procinit();
-    pub fn binit();
-    pub fn iinit();
-    pub fn fileinit();
-    pub fn userinit();
-    // pub fn scheduler();
-}
-
-use crate::{printf::print, proc::cpuid};
+use crate::proc::cpuid;
 use core::ffi::{c_char, CStr};
+
+pub(crate) use crate::console::printf::print;
 
 pub static mut STARTED: bool = false;
 pub static mut PANICKED: bool = false;
+
+/// Maximum number of processes
+pub const NPROC: usize = 64;
+/// Maximum number of CPUs
+pub const NCPU: usize = 8;
+/// Maximum number of open files per process
+pub const NOFILE: usize = 16;
+/// Maximum number of open files per system
+pub const NFILE: usize = 100;
+/// Maximum number of active inodes
+pub const NINODE: usize = 50;
+/// Maximum major device number
+pub const NDEV: usize = 10;
+/// Device number of file system root disk
+pub const ROOTDEV: usize = 1;
+/// Max exec arguments
+pub const MAXARG: usize = 32;
+/// Max num of blocks any FS op writes
+pub const MAXOPBLOCKS: usize = 10;
+/// Max data blocks in on-disk log
+pub const LOGSIZE: usize = MAXOPBLOCKS * 3;
+/// Size of disk block cache
+pub const NBUF: usize = MAXOPBLOCKS * 3;
+/// Size of file system in blocks
+pub const FSSIZE: usize = 2000;
+/// Maximum file path size
+pub const MAXPATH: usize = 128;
 
 #[no_mangle]
 pub unsafe extern "C" fn main() -> ! {
     if cpuid() == 0 {
         console::consoleinit();
-        printf::printfinit();
-        kalloc::kinit();
+        console::printf::printfinit();
+        mem::kalloc::kinit();
         print!("\nxv6 kernel is booting\n");
-        kvminit();
-        kvminithart();
-        procinit();
+        mem::virtual_memory::kvminit();
+        mem::virtual_memory::kvminithart();
+        proc::procinit();
         trap::trapinit();
         trap::trapinithart();
         riscv::plic::plicinit();
         riscv::plic::plicinithart();
-        binit();
-        iinit();
-        fileinit();
-        virtio_disk::virtio_disk_init();
-        userinit();
+        io::bio::binit();
+        fs::iinit();
+        fs::file::fileinit();
+        fs::virtio_disk::virtio_disk_init();
+        proc::userinit();
         STARTED = true;
     } else {
         while !STARTED {
             core::hint::spin_loop();
         }
-        kvminithart();
+        mem::virtual_memory::kvminithart();
         trap::trapinithart();
         riscv::plic::plicinithart();
     }
@@ -80,9 +89,9 @@ pub unsafe extern "C" fn main() -> ! {
 #[panic_handler]
 fn panic_wrapper(panic_info: &core::panic::PanicInfo) -> ! {
     if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
-        crate::printf::print!("kernel panic: {}\n", s);
+        print!("kernel panic: {}\n", s);
     } else {
-        crate::printf::print!("kernel panic\n");
+        print!("kernel panic\n");
     }
 
     // crate::printf::print!("  ______\n");
@@ -94,12 +103,12 @@ fn panic_wrapper(panic_info: &core::panic::PanicInfo) -> ! {
     // crate::printf::print!("                 ||----w |\n");
     // crate::printf::print!("                 ||     ||\n");
 
-    crate::printf::print!("███████╗██╗   ██╗ ██████╗██╗  ██╗██╗██╗\n");
-    crate::printf::print!("██╔════╝██║   ██║██╔════╝██║ ██╔╝██║██║\n");
-    crate::printf::print!("█████╗  ██║   ██║██║     █████╔╝ ██║██║\n");
-    crate::printf::print!("██╔══╝  ██║   ██║██║     ██╔═██╗ ╚═╝╚═╝\n");
-    crate::printf::print!("██║     ╚██████╔╝╚██████╗██║  ██╗██╗██╗\n");
-    crate::printf::print!("╚═╝      ╚═════╝  ╚═════╝╚═╝  ╚═╝╚═╝╚═╝\n");
+    print!("███████╗██╗   ██╗ ██████╗██╗  ██╗██╗██╗\n");
+    print!("██╔════╝██║   ██║██╔════╝██║ ██╔╝██║██║\n");
+    print!("█████╗  ██║   ██║██║     █████╔╝ ██║██║\n");
+    print!("██╔══╝  ██║   ██║██║     ██╔═██╗ ╚═╝╚═╝\n");
+    print!("██║     ╚██████╔╝╚██████╗██║  ██╗██╗██╗\n");
+    print!("╚═╝      ╚═════╝  ╚═════╝╚═╝  ╚═╝╚═╝╚═╝\n");
 
     unsafe { crate::PANICKED = true };
 

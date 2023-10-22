@@ -1,4 +1,9 @@
-use crate::{printf::print, proc::myproc, riscv::Pagetable, string::strlen, sysproc};
+use crate::{
+    console::printf::print,
+    proc::{self, myproc, sleep_lock},
+    riscv::Pagetable,
+    string::strlen,
+};
 use core::{mem::size_of, ptr::addr_of_mut};
 
 extern "C" {
@@ -46,20 +51,61 @@ pub enum Syscall {
 impl Syscall {
     pub unsafe fn call(&self) -> u64 {
         match self {
-            Syscall::Fork => sysproc::sys_fork(),
-            Syscall::Exit => sysproc::sys_exit(),
-            Syscall::Wait => sysproc::sys_wait(),
+            Syscall::Fork => proc::fork() as u64,
+            Syscall::Exit => {
+                let mut n = 0i32;
+                argint(0, addr_of_mut!(n));
+                proc::exit(n)
+            }
+            Syscall::Wait => {
+                let mut p = 0u64;
+                argaddr(0, addr_of_mut!(p));
+                proc::wait(p) as u64
+            }
             Syscall::Pipe => sys_pipe(),
             Syscall::Read => sys_read(),
-            Syscall::Kill => sysproc::sys_kill(),
+            Syscall::Kill => {
+                let mut pid = 0i32;
+                argint(0, addr_of_mut!(pid));
+                proc::kill(pid) as u64
+            }
             Syscall::Exec => sys_exec(),
             Syscall::Fstat => sys_fstat(),
             Syscall::Chdir => sys_chdir(),
             Syscall::Dup => sys_dup(),
-            Syscall::Getpid => sysproc::sys_getpid(),
-            Syscall::Sbrk => sysproc::sys_sbrk(),
-            Syscall::Sleep => sysproc::sys_sleep(),
-            Syscall::Uptime => sysproc::sys_uptime(),
+            Syscall::Getpid => (*myproc()).pid as u64,
+            Syscall::Sbrk => {
+                let mut n = 0i32;
+                argint(0, addr_of_mut!(n));
+                let addr = (*myproc()).sz;
+
+                if proc::growproc(n) < 0 {
+                    -1i64 as u64
+                } else {
+                    addr
+                }
+            }
+            Syscall::Sleep => {
+                use crate::trap::{ticks, tickslock};
+
+                let mut n = 0i32;
+                argint(0, addr_of_mut!(n));
+
+                let _guard = tickslock.lock();
+                while ticks < ticks + n as u32 {
+                    if proc::killed(myproc()) > 0 {
+                        tickslock.unlock();
+                        return -1i64 as u64;
+                    }
+                    sleep_lock(addr_of_mut!(ticks).cast(), addr_of_mut!(tickslock).cast())
+                }
+                0
+            }
+            // Returns how many clock tick interrupts have occured since start.
+            Syscall::Uptime => {
+                let _guard = crate::trap::tickslock.lock();
+                crate::trap::ticks as u64
+            }
             Syscall::Open => sys_open(),
             Syscall::Write => sys_write(),
             Syscall::Mknod => sys_mknod(),

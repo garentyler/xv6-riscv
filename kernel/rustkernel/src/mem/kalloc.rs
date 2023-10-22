@@ -3,8 +3,8 @@
 //! and pipe buffers. Allocates whole 4096-byte pages.
 
 use crate::{
+    mem::memset,
     riscv::{memlayout::PHYSTOP, pg_round_up, PGSIZE},
-    string::memset,
     sync::spinlock::Spinlock,
 };
 use core::{

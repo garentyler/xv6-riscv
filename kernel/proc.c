@@ -336,7 +336,7 @@ wait(uint64 addr)
     }
     
     // Wait for a child to exit.
-    sleep(p, &wait_lock);  //DOC: wait-sleep
+    sleep_lock(p, &wait_lock); // DOC: wait-sleep
   }
 }
 
@@ -412,7 +412,7 @@ forkret(void)
 
 // Atomically release lock and sleep on chan.
 // Reacquires lock when awakened.
-void sleep(void *chan, struct spinlock *lk);
+void sleep_lock(void *chan, struct spinlock *lk);
 
 // Wake up all processes sleeping on chan.
 // Must be called without any p->lock.

@@ -1,8 +1,7 @@
 #![allow(clippy::comparison_chain)]
 
 use crate::{
-    kalloc::kfree,
-    param::*,
+    mem::kalloc::kfree,
     riscv::{self, Pagetable, PTE_W},
     sync::spinlock::Spinlock,
     sync::spinmutex::SpinMutexGuard,
@@ -13,8 +12,8 @@ use core::{
 };
 
 extern "C" {
-    pub static mut cpus: [Cpu; NCPU];
-    pub static mut proc: [Proc; NPROC];
+    pub static mut cpus: [Cpu; crate::NCPU];
+    pub static mut proc: [Proc; crate::NPROC];
     pub static mut initproc: *mut Proc;
     pub static mut nextpid: i32;
     pub static mut pid_lock: Spinlock;
@@ -26,6 +25,8 @@ extern "C" {
     // trampoline.S
     pub static mut trampoline: *mut c_char;
 
+    pub fn procinit();
+    pub fn userinit();
     pub fn forkret();
     pub fn fork() -> i32;
     pub fn exit(status: i32) -> !;

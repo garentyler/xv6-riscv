@@ -15,10 +15,10 @@ pub struct PrintLock {
 macro_rules! print {
     ($($arg:tt)*) => {{
         // Still unsafe because static mut.
-        let _guard = unsafe { $crate::printf::PRINT_LOCK.lock() };
+        let _guard = unsafe { $crate::console::printf::PRINT_LOCK.lock() };
 
         // Allocate a page of memory as the buffer and release it when we're done.
-        let buf = unsafe { $crate::kalloc::kalloc() as *mut [u8; 4096] };
+        let buf = unsafe { $crate::mem::kalloc::kalloc() as *mut [u8; 4096] };
 
         let s: &str = format_no_std::show(
             unsafe { buf.as_mut() }.unwrap(),
@@ -29,7 +29,7 @@ macro_rules! print {
             $crate::console::consputc(*c);
         }
 
-        unsafe { $crate::kalloc::kfree(buf.cast()) };
+        unsafe { $crate::mem::kalloc::kfree(buf.cast()) };
     }};
 }
 pub(crate) use print;

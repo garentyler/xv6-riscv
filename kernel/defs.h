@@ -102,7 +102,7 @@ struct proc*    myproc();
 void            procinit(void);
 void            scheduler(void) __attribute__((noreturn));
 void            sched(void);
-void            sleep(void*, struct spinlock*);
+void sleep_lock(void *, struct spinlock *);
 void            userinit(void);
 int             wait(uint64);
 void            wakeup(void*);
