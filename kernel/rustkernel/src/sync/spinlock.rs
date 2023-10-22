@@ -4,7 +4,7 @@ use crate::{
 };
 use core::{
     ffi::c_char,
-    ptr::null_mut,
+    ptr::{null_mut, addr_of},
     sync::atomic::{AtomicBool, Ordering},
 };
 
@@ -36,29 +36,31 @@ impl Spinlock {
     pub fn held_by_current_cpu(&self) -> bool {
         self.cpu == unsafe { mycpu() } && self.locked.load(Ordering::Relaxed)
     }
-    pub unsafe fn lock_unguarded(&mut self) {
+    pub unsafe fn lock_unguarded(&self) {
         push_off();
 
         if self.held_by_current_cpu() {
             panic!("Attempt to acquire twice by the same CPU");
         }
 
-        while self.locked.swap(true, Ordering::Acquire) {
+        let this: &mut Self = &mut *addr_of!(*self).cast_mut();
+
+        while this.locked.swap(true, Ordering::Acquire) {
             core::hint::spin_loop();
         }
 
         // The lock is now locked and we can write our CPU info.
-
-        self.cpu = mycpu();
+        this.cpu = mycpu();
     }
-    pub unsafe fn unlock(&mut self) {
+    pub unsafe fn unlock(&self) {
         if !self.held_by_current_cpu() {
             panic!("Attempt to release lock from different CPU");
         }
 
-        self.cpu = null_mut();
+        let this: &mut Self = &mut *addr_of!(*self).cast_mut();
 
-        self.locked.store(false, Ordering::Release);
+        this.cpu = null_mut();
+        this.locked.store(false, Ordering::Release);
 
         pop_off();
     }
