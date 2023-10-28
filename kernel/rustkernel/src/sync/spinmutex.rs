@@ -17,13 +17,22 @@ impl<T> SpinMutex<T> {
         }
     }
     pub fn lock(&self) -> SpinMutexGuard<'_, T> {
+        unsafe {
+            crate::trap::push_intr_off();
+        }
+
         while self.locked.swap(true, Ordering::Acquire) {
             core::hint::spin_loop();
         }
+
         SpinMutexGuard { mutex: self }
     }
     pub unsafe fn unlock(&self) {
         self.locked.store(false, Ordering::Release);
+
+        unsafe {
+            crate::trap::pop_intr_off();
+        }
     }
 }
 unsafe impl<T> Sync for SpinMutex<T> where T: Send {}

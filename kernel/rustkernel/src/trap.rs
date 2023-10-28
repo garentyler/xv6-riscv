@@ -278,3 +278,37 @@ pub unsafe extern "C" fn usertrap() {
 
     usertrapret();
 }
+
+// push_intr_off/pop_intr_off are like intr_off()/intr_on() except that they are matched:
+// it takes two pop_intr_off()s to undo two push_intr_off()s.  Also, if interrupts
+// are initially off, then push_intr_off, pop_intr_off leaves them off.
+
+#[no_mangle]
+pub unsafe extern "C" fn push_intr_off() {
+    let old = crate::riscv::intr_get();
+    let cpu = mycpu();
+
+    crate::riscv::intr_off();
+    if (*cpu).interrupt_disable_layers == 0 {
+        (*cpu).previous_interrupts_enabled = old;
+    }
+    (*cpu).interrupt_disable_layers += 1;
+}
+#[no_mangle]
+pub unsafe extern "C" fn pop_intr_off() {
+    let cpu = mycpu();
+
+    if crate::riscv::intr_get() == 1 {
+        // crate::panic_byte(b'0');
+        panic!("pop_intr_off - interruptible");
+    } else if (*cpu).interrupt_disable_layers < 1 {
+        // crate::panic_byte(b'1');
+        panic!("pop_intr_off");
+    }
+
+    (*cpu).interrupt_disable_layers -= 1;
+
+    if (*cpu).interrupt_disable_layers == 0 && (*cpu).previous_interrupts_enabled == 1 {
+        crate::riscv::intr_on();
+    }
+}
