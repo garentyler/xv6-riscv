@@ -76,6 +76,25 @@ pub struct Inode {
     addresses: [u32; crate::fs::NDIRECT + 1],
 }
 
+pub struct InodeLockGuard<'i> {
+    pub inode: &'i mut Inode,
+}
+impl<'i> InodeLockGuard<'i> {
+    pub fn new(inode: &mut Inode) -> InodeLockGuard<'_> {
+        unsafe {
+            super::ilock(inode as *mut Inode);
+        }
+        InodeLockGuard { inode }
+    }
+}
+impl<'i> core::ops::Drop for InodeLockGuard<'i> {
+    fn drop(&mut self) {
+        unsafe {
+            super::iunlock(self.inode as *mut Inode);
+        }
+    }
+}
+
 /// Map major device number to device functions.
 #[repr(C)]
 #[derive(Copy, Clone, Default)]
@@ -177,9 +196,8 @@ pub unsafe extern "C" fn fileclose(file: *mut File) {
         match f.kind {
             FileType::Pipe => pipe::pipeclose(f.pipe, f.writable as i32),
             FileType::Inode | FileType::Device => {
-                log::begin_op();
+                let _operation = log::LogOperation::new();
                 super::iput(f.ip);
-                log::end_op();
             }
             FileType::None => {}
         }
@@ -195,9 +213,10 @@ pub unsafe extern "C" fn filestat(file: *mut File, addr: u64) -> i32 {
     let mut stat = Stat::default();
 
     if (*file).kind == FileType::Inode || (*file).kind == FileType::Device {
-        super::ilock((*file).ip);
-        super::stati((*file).ip, addr_of_mut!(stat));
-        super::iunlock((*file).ip);
+        {
+            let _guard = InodeLockGuard::new((*file).ip.as_mut().unwrap());
+            super::stati((*file).ip, addr_of_mut!(stat));
+        }
 
         if copyout(
             (*p).pagetable,
@@ -237,12 +256,11 @@ pub unsafe extern "C" fn fileread(file: *mut File, addr: u64, n: i32) -> i32 {
             read(1, addr, n)
         }
         FileType::Inode => {
-            super::ilock((*file).ip);
+            let _guard = InodeLockGuard::new((*file).ip.as_mut().unwrap());
             let r = super::readi((*file).ip, 1, addr, (*file).off, n as u32);
             if r > 0 {
                 (*file).off += r as u32;
             }
-            super::iunlock((*file).ip);
             r
         }
         _ => panic!("fileread"),
@@ -285,14 +303,16 @@ pub unsafe extern "C" fn filewrite(file: *mut File, addr: u64, n: i32) -> i32 {
                     n1 = max as i32;
                 }
 
-                log::begin_op();
-                super::ilock((*file).ip);
-                let r = super::writei((*file).ip, 1, addr + i as u64, (*file).off, n1 as u32);
-                if r > 0 {
-                    (*file).off += r as u32;
-                }
-                super::iunlock((*file).ip);
-                log::end_op();
+                let r = {
+                    let _operation = log::LogOperation::new();
+                    let _guard = InodeLockGuard::new((*file).ip.as_mut().unwrap());
+
+                    let r = super::writei((*file).ip, 1, addr + i as u64, (*file).off, n1 as u32);
+                    if r > 0 {
+                        (*file).off += r as u32;
+                    }
+                    r
+                };
 
                 if r != n1 {
                     // Error from writei.

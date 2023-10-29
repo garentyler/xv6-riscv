@@ -25,3 +25,21 @@ extern "C" {
     pub fn end_op();
     pub fn log_write(buffer: *mut Buffer);
 }
+
+#[derive(Default)]
+pub struct LogOperation;
+impl LogOperation {
+    pub fn new() -> LogOperation {
+        unsafe {
+            begin_op();
+        }
+        LogOperation
+    }
+}
+impl core::ops::Drop for LogOperation {
+    fn drop(&mut self) {
+        unsafe {
+            end_op();
+        }
+    }
+}
