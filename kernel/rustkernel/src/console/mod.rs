@@ -17,7 +17,7 @@ use crate::{
     sync::spinmutex::SpinMutex,
 };
 use core::{ffi::c_void, ptr::addr_of_mut};
-use uart::{uartinit, uartputc, Uart};
+use uart::UART0;
 
 extern "C" {
     fn either_copyin(dst: *mut c_void, user_src: i32, src: u64, len: u64) -> i32;
@@ -48,9 +48,7 @@ impl Console {
 }
 impl core::fmt::Write for Console {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        for b in s.as_bytes() {
-            Uart::write_byte_sync(*b);
-        }
+        UART0.write_slice(s.as_bytes());
         core::fmt::Result::Ok(())
     }
 }
@@ -75,11 +73,11 @@ const fn ctrl_x(x: u8) -> u8 {
 pub fn consputc(c: u8) {
     if c == BACKSPACE {
         // If the user typed backspace, overwrite with a space.
-        Uart::write_byte_sync(0x08);
-        Uart::write_byte_sync(b' ');
-        Uart::write_byte_sync(0x08);
+        UART0.write_byte(0x08);
+        UART0.write_byte(b' ');
+        UART0.write_byte(0x08);
     } else {
-        Uart::write_byte_sync(c);
+        UART0.write_byte(c);
     }
 }
 
@@ -92,7 +90,7 @@ pub fn consolewrite(user_src: i32, src: u64, n: i32) -> i32 {
             if either_copyin(addr_of_mut!(c).cast(), user_src, src + i as u64, 1) == -1 {
                 return i;
             } else {
-                uartputc(c as u8);
+                UART0.write_byte_buffered(c as u8);
             }
         }
         0
@@ -160,7 +158,7 @@ pub fn consoleread(user_dst: i32, mut dst: u64, mut n: i32) -> i32 {
 }
 
 pub unsafe fn consoleinit() {
-    uartinit();
+    UART0.initialize();
 
     // Connect read and write syscalls
     // to consoleread and consolewrite.

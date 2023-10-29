@@ -22,7 +22,7 @@ use super::{MAXVA, PGSIZE};
 pub const QEMU_POWER: u64 = 0x100000u64;
 
 // QEMU puts UART registers here in physical memory.
-pub const UART0: u64 = 0x10000000;
+pub const UART0: usize = 0x10000000;
 pub const UART0_IRQ: i32 = 10;
 
 // Virtio MMIO interface

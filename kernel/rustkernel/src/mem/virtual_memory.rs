@@ -30,7 +30,7 @@ pub unsafe fn kvmmake() -> Pagetable {
     kvmmap(pagetable, QEMU_POWER, QEMU_POWER, PGSIZE, PTE_R | PTE_W);
 
     // UART registers
-    kvmmap(pagetable, UART0, UART0, PGSIZE, PTE_R | PTE_W);
+    kvmmap(pagetable, UART0 as u64, UART0 as u64, PGSIZE, PTE_R | PTE_W);
 
     // VirtIO MMIO disk interface
     kvmmap(pagetable, VIRTIO0, VIRTIO0, PGSIZE, PTE_R | PTE_W);
