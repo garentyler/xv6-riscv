@@ -16,11 +16,10 @@ void ramdiskinit(void);
 
 // If B_DIRTY is set, write buf to disk, clear B_DIRTY, set B_VALID.
 // Else if B_VALID is not set, read buf from disk, set B_VALID.
+// Caller should hold b->lock
 void
 ramdiskrw(struct buf *b)
 {
-  if(!holdingsleep(&b->lock))
-    panic("ramdiskrw: buf not locked");
   if((b->flags & (B_VALID|B_DIRTY)) == B_VALID)
     panic("ramdiskrw: nothing to do");
 

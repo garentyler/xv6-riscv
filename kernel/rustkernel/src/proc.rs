@@ -391,6 +391,21 @@ pub unsafe fn sleep_mutex<T>(chan: *mut c_void, mutex: &mut SpinMutexGuard<T>) {
     core::mem::forget(guard);
 }
 
+/// Sleep until `wakeup(chan)` is called somewhere else.
+pub unsafe fn sleep(chan: *mut c_void) {
+    let p = myproc();
+    let _guard = (*p).lock.lock();
+
+    // Go to sleep.
+    (*p).chan = chan;
+    (*p).state = ProcState::Sleeping;
+
+    sched();
+
+    // Tidy up.
+    (*p).chan = null_mut();
+}
+
 /// Kill the process with the given pid.
 /// The victim won't exit until it tries to return
 /// to user space (see usertrap() in trap.c).

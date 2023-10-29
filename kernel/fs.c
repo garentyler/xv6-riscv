@@ -317,10 +317,11 @@ ilock(struct inode *ip)
 }
 
 // Unlock the given inode.
+// Caller should hold ip->lock
 void
 iunlock(struct inode *ip)
 {
-  if(ip == 0 || !holdingsleep(&ip->lock) || ip->ref < 1)
+  if (ip == 0 || ip->ref < 1)
     panic("iunlock");
 
   releasesleep(&ip->lock);

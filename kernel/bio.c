@@ -106,8 +106,6 @@ bread(uint dev, uint blockno)
 void
 bwrite(struct buf *b)
 {
-  if(!holdingsleep(&b->lock))
-    panic("bwrite");
   virtio_disk_rw(b, 1);
 }
 
@@ -116,9 +114,6 @@ bwrite(struct buf *b)
 void
 brelse(struct buf *b)
 {
-  if(!holdingsleep(&b->lock))
-    panic("brelse");
-
   releasesleep(&b->lock);
 
   acquire(&bcache.lock);

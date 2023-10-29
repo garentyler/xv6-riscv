@@ -125,8 +125,7 @@ void            pop_off(void);
 
 // sleeplock.c
 void            acquiresleep(struct sleeplock*);
-void            releasesleep(struct sleeplock*);
-int             holdingsleep(struct sleeplock*);
+void releasesleep(struct sleeplock *);
 void            initsleeplock(struct sleeplock*, char*);
 
 // string.c

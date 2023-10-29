@@ -1,53 +1,27 @@
-use crate::{
-    proc::{myproc, sleep_lock, wakeup},
-    sync::spinlock::Spinlock,
-};
+use crate::proc::{wakeup, sleep};
 use core::{
     ffi::c_char,
-    ptr::{addr_of, null_mut},
+    ptr::addr_of,
+    sync::atomic::{AtomicBool, Ordering},
 };
 
 #[repr(C)]
+#[derive(Default)]
 pub struct Sleeplock {
-    pub locked: u32,
-    pub inner: Spinlock,
-    pub name: *mut c_char,
-    pub pid: i32,
+    pub locked: AtomicBool,
 }
 impl Sleeplock {
-    pub const unsafe fn uninitialized() -> Sleeplock {
+    pub const fn new() -> Sleeplock {
         Sleeplock {
-            locked: 0,
-            inner: Spinlock::new(),
-            name: null_mut(),
-            pid: 0,
+            locked: AtomicBool::new(false),
         }
-    }
-    /// Initializes a `Sleeplock`.
-    pub const fn new(name: *mut c_char) -> Sleeplock {
-        Sleeplock {
-            locked: 0,
-            inner: Spinlock::new(),
-            name,
-            pid: 0,
-        }
-    }
-    /// Check whether this proc is holding the lock.
-    pub fn held_by_current_proc(&self) -> bool {
-        self.locked > 0 && self.pid == unsafe { (*myproc()).pid }
     }
     #[allow(clippy::while_immutable_condition)]
     pub unsafe fn lock_unguarded(&self) {
-        let _guard = self.inner.lock();
-        while self.locked > 0 {
-            sleep_lock(
-                addr_of!(*self).cast_mut().cast(),
-                addr_of!(self.inner).cast_mut().cast(),
-            );
+        while self.locked.swap(true, Ordering::Acquire) {
+            // Put the process to sleep until it gets released.
+            sleep(addr_of!(*self).cast_mut().cast());
         }
-        let this: &mut Self = &mut *addr_of!(*self).cast_mut();
-        this.locked = 1;
-        this.pid = (*myproc()).pid;
     }
     pub fn lock(&self) -> SleeplockGuard<'_> {
         unsafe {
@@ -56,10 +30,7 @@ impl Sleeplock {
         SleeplockGuard { lock: self }
     }
     pub unsafe fn unlock(&self) {
-        let _guard = self.inner.lock();
-        let this: &mut Self = &mut *addr_of!(*self).cast_mut();
-        this.locked = 0;
-        this.pid = 0;
+        self.locked.store(false, Ordering::Release);
         wakeup(addr_of!(*self).cast_mut().cast());
     }
 }
@@ -74,8 +45,8 @@ impl<'l> Drop for SleeplockGuard<'l> {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn initsleeplock(lock: *mut Sleeplock, name: *mut c_char) {
-    (*lock) = Sleeplock::new(name);
+pub unsafe extern "C" fn initsleeplock(lock: *mut Sleeplock, _name: *mut c_char) {
+    (*lock) = Sleeplock::new();
 }
 
 #[no_mangle]
@@ -86,13 +57,4 @@ pub unsafe extern "C" fn acquiresleep(lock: *mut Sleeplock) {
 #[no_mangle]
 pub unsafe extern "C" fn releasesleep(lock: *mut Sleeplock) {
     (*lock).unlock();
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn holdingsleep(lock: *mut Sleeplock) -> i32 {
-    if (*lock).held_by_current_proc() {
-        1
-    } else {
-        0
-    }
 }
