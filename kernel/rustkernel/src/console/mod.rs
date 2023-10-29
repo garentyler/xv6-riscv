@@ -13,7 +13,7 @@ pub mod uart;
 
 use crate::{
     fs::file::{devsw, CONSOLE},
-    proc::{killed, myproc, procdump, sleep_mutex, wakeup},
+    proc::{killed, myproc, procdump, wakeup},
     sync::spinmutex::SpinMutex,
 };
 use core::{ffi::c_void, ptr::addr_of_mut};
@@ -120,9 +120,8 @@ pub fn consoleread(user_dst: i32, mut dst: u64, mut n: i32) -> i32 {
                     // cons.lock.unlock();
                     return -1;
                 }
-                // let channel = addr_of_mut!(console.read_index).cast();
-                // console.sleep(channel);
-                sleep_mutex(addr_of_mut!(console.read_index).cast(), &mut console);
+                let channel = addr_of_mut!(console.read_index).cast();
+                console.sleep(channel);
             }
 
             c = *console.read_byte();

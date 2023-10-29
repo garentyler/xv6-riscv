@@ -1,6 +1,10 @@
-use crate::trap::{pop_intr_off, push_intr_off};
+use crate::{
+    proc::{myproc, sched, ProcState},
+    trap::{pop_intr_off, push_intr_off},
+};
 use core::{
     ffi::c_char,
+    ptr::null_mut,
     sync::atomic::{AtomicBool, Ordering},
 };
 
@@ -38,6 +42,23 @@ impl Spinlock {
 
 pub struct SpinlockGuard<'l> {
     pub lock: &'l Spinlock,
+}
+impl<'l> SpinlockGuard<'l> {
+    /// Sleep until `wakeup(chan)` is called somewhere else, yielding the lock until then.
+    pub unsafe fn sleep(&self, chan: *mut core::ffi::c_void) {
+        let p = myproc();
+        let _guard = (*p).lock.lock();
+        self.lock.unlock();
+
+        // Put the process to sleep.
+        (*p).chan = chan;
+        (*p).state = ProcState::Sleeping;
+        sched();
+
+        // Tidy up and reacquire the lock.
+        (*p).chan = null_mut();
+        self.lock.lock_unguarded();
+    }
 }
 impl<'l> Drop for SpinlockGuard<'l> {
     fn drop(&mut self) {

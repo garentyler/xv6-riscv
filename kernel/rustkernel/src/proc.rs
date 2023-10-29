@@ -3,8 +3,7 @@
 use crate::{
     mem::kalloc::kfree,
     riscv::{self, Pagetable, PTE_W},
-    sync::spinlock::Spinlock,
-    sync::spinmutex::SpinMutexGuard,
+    sync::spinlock::{Spinlock, SpinlockGuard},
 };
 use core::{
     ffi::{c_char, c_void},
@@ -341,53 +340,13 @@ pub unsafe extern "C" fn sched() {
     (*c).previous_interrupts_enabled = previous_interrupts_enabled;
 }
 
-/// Atomically release lock and sleep on chan.
-/// Reacquires lock when awakened.
+/// The lock should already be locked.
+/// Unsafely create a new guard for it so that we can call SpinlockGuard.sleep().
 #[no_mangle]
 pub unsafe extern "C" fn sleep_lock(chan: *mut c_void, lock: *mut Spinlock) {
-    let p = myproc();
-
-    // Must acquire p->lock in order to
-    // change p->state and then call sched.
-    // Once we hold p->lock, we can be
-    // guaranteed that we won't miss any wakeup
-    // (wakeup locks p->lock),
-    // so it's okay to release lk.
-
-    let _guard = (*p).lock.lock();
-    (*lock).unlock();
-
-    // Go to sleep.
-    (*p).chan = chan;
-    (*p).state = ProcState::Sleeping;
-
-    sched();
-
-    // Tidy up.
-    (*p).chan = null_mut();
-
-    // Reacquire original lock.
-    (*lock).lock_unguarded();
-}
-
-pub unsafe fn sleep_mutex<T>(chan: *mut c_void, mutex: &mut SpinMutexGuard<T>) {
-    let p = myproc();
-    let mutex = mutex.mutex;
-
-    let _guard = (*p).lock.lock();
-    mutex.unlock();
-
-    // Go to sleep.
-    (*p).chan = chan;
-    (*p).state = ProcState::Sleeping;
-
-    sched();
-
-    // Tidy up.
-    (*p).chan = null_mut();
-
-    // Reacquire original lock.
-    let guard = mutex.lock();
+    let lock: &Spinlock = &*lock;
+    let guard = SpinlockGuard { lock };
+    guard.sleep(chan);
     core::mem::forget(guard);
 }
 
