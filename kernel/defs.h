@@ -156,8 +156,6 @@ void            usertrapret(void);
 void            uartintr(void);
 
 // vm.c
-void            kvminit(void);
-void            kvminithart(void);
 void            kvmmap(pagetable_t, uint64, uint64, uint64, int);
 int             mappages(pagetable_t, uint64, uint64, uint64, int);
 pagetable_t     uvmcreate(void);

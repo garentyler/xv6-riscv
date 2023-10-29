@@ -32,6 +32,7 @@ extern "C" {
     pub fn exit(status: i32) -> !;
     pub fn wait(addr: u64) -> i32;
     pub fn procdump();
+    pub fn proc_mapstacks(kpgtbl: Pagetable);
     pub fn proc_pagetable(p: *mut Proc) -> Pagetable;
     pub fn proc_freepagetable(pagetable: Pagetable, sz: u64);
     pub fn wakeup(chan: *const c_void);
@@ -253,52 +254,6 @@ pub unsafe extern "C" fn allocpid() -> i32 {
     pid
 }
 
-/*
-
-/// Look in the process table for an UNUSED proc.
-/// If found, initialize state required to run in the kernel,
-/// and return with p->lock held. If there are no free procs,
-/// or a memory allocation fails, return 0.
-#[no_mangle]
-pub unsafe extern "C" fn allocproc() -> *mut Proc {
-    for p in &mut proc {
-        let lock = addr_of_mut!(p.lock);
-        (*lock).lock_unguarded();
-
-        if p.state != ProcState::Unused {
-            (*lock).unlock();
-            continue;
-        }
-
-        let p = addr_of_mut!(*p);
-        (*p).pid = allocpid();
-        (*p).state = ProcState::Used;
-
-        // Allocate a trapframe page and
-        // create an empty user page table.
-        (*p).trapframe = kalloc().cast();
-        (*p).pagetable = proc_pagetable(p);
-
-        if (*p).trapframe.is_null() || (*p).pagetable.is_null() {
-            freeproc(p);
-            (*p).lock.unlock();
-            return null_mut();
-        }
-
-        // Set up new context to start executing
-        // at forkret which returns to user space.
-        memset(addr_of_mut!((*p).context).cast(), 0, size_of::<Context>() as u32);
-        // TODO: convert fn pointer to u64
-        (*p).context.ra = forkret as usize as u64;
-        (*p).context.sp = (*p).kstack + PGSIZE;
-
-        return p;
-    }
-
-    null_mut()
-}
-*/
-
 /// Free a proc structure and the data hanging from it, including user pages.
 /// p->lock must be held.
 #[no_mangle]
@@ -321,23 +276,6 @@ pub unsafe extern "C" fn freeproc(p: *mut Proc) {
     (*p).state = ProcState::Unused;
 }
 
-// /// Wake up all processes sleeping on chan.
-// /// Must be called without any p->lock.
-// #[no_mangle]
-// pub unsafe extern "C" fn wakeup(chan: *mut c_void) {
-//     for p in &mut proc {
-//         let p: *mut Proc = addr_of_mut!(*p);
-//
-//         if p != myproc() {
-//             (*p).lock.lock_unguarded();
-//             if (*p).state == ProcState::Sleeping && (*p).chan == chan {
-//                 (*p).state = ProcState::Runnable;
-//             }
-//             (*p).lock.unlock();
-//         }
-//     }
-// }
-
 /// Pass p's abandoned children to init.
 /// Caller must hold wait_lock.
 #[no_mangle]
@@ -358,7 +296,7 @@ pub unsafe extern "C" fn growproc(n: i32) -> i32 {
     let mut sz = (*p).sz;
 
     if n > 0 {
-        sz = uvmalloc((*p).pagetable, sz, sz.wrapping_add(n as u64), PTE_W as i32);
+        sz = uvmalloc((*p).pagetable, sz, sz.wrapping_add(n as u64), PTE_W);
         if sz == 0 {
             return -1;
         }
@@ -454,20 +392,6 @@ pub unsafe fn sleep_mutex<T>(chan: *mut c_void, mutex: &mut SpinMutexGuard<T>) {
     let guard = mutex.lock();
     core::mem::forget(guard);
 }
-
-// pub unsafe fn sleep(chan: *mut c_void) {
-//     let p = myproc();
-//     let _guard = (*p).lock.lock();
-//
-//     // Go to sleep.
-//     (*p).chan = chan;
-//     (*p).state = ProcState::Sleeping;
-//
-//     sched();
-//
-//     // Clean up.
-//     (*p).chan = null_mut();
-// }
 
 /// Kill the process with the given pid.
 /// The victim won't exit until it tries to return

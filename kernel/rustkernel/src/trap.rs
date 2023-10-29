@@ -177,7 +177,7 @@ pub unsafe extern "C" fn usertrapret() {
     w_sepc((*(*p).trapframe).epc);
 
     // Tell trampoline.S the user page table to switch to.
-    let satp = make_satp((*p).pagetable as usize as u64);
+    let satp = make_satp((*p).pagetable);
 
     // Jump to userret in trampoline.S at the top of memory, which
     // switches to the user page table, restores user registers,

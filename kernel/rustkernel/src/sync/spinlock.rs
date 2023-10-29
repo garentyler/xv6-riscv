@@ -1,6 +1,6 @@
 use crate::{
     proc::{mycpu, Cpu},
-    trap::{push_intr_off, pop_intr_off},
+    trap::{pop_intr_off, push_intr_off},
 };
 use core::{
     ffi::c_char,
