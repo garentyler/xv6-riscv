@@ -1,4 +1,4 @@
-use crate::sync::spinlock::Spinlock;
+use crate::{fs::file::File, sync::spinlock::Spinlock};
 use core::ffi::c_char;
 
 pub const PIPESIZE: usize = 512usize;
@@ -15,4 +15,11 @@ pub struct Pipe {
     readopen: i32,
     /// Write fd is still open.
     writeopen: i32,
+}
+
+extern "C" {
+    pub fn pipealloc(a: *mut *mut File, b: *mut *mut File) -> i32;
+    pub fn pipeclose(pipe: *mut Pipe, writable: i32);
+    pub fn pipewrite(pipe: *mut Pipe, addr: u64, n: i32) -> i32;
+    pub fn piperead(pipe: *mut Pipe, addr: u64, n: i32) -> i32;
 }

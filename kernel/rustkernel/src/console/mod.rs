@@ -84,18 +84,19 @@ pub fn consputc(c: u8) {
 }
 
 /// User write()s to the console go here.
-#[no_mangle]
-pub unsafe extern "C" fn consolewrite(user_src: i32, src: u64, n: i32) -> i32 {
-    for i in 0..n {
-        let mut c = 0i8;
+pub fn consolewrite(user_src: i32, src: u64, n: i32) -> i32 {
+    unsafe {
+        for i in 0..n {
+            let mut c = 0i8;
 
-        if either_copyin(addr_of_mut!(c).cast(), user_src, src + i as u64, 1) == -1 {
-            return i;
-        } else {
-            uartputc(c as u8);
+            if either_copyin(addr_of_mut!(c).cast(), user_src, src + i as u64, 1) == -1 {
+                return i;
+            } else {
+                uartputc(c as u8);
+            }
         }
+        0
     }
-    0
 }
 
 /// User read()s from the console go here.
@@ -103,59 +104,60 @@ pub unsafe extern "C" fn consolewrite(user_src: i32, src: u64, n: i32) -> i32 {
 /// Copy (up to) a whole input line to dst.
 /// user_dst indicates whether dst is a user
 /// or kernel address.
-#[no_mangle]
-pub unsafe extern "C" fn consoleread(user_dst: i32, mut dst: u64, mut n: i32) -> i32 {
-    let target = n;
-    let mut c;
-    let mut cbuf;
+pub fn consoleread(user_dst: i32, mut dst: u64, mut n: i32) -> i32 {
+    unsafe {
+        let target = n;
+        let mut c;
+        let mut cbuf;
 
-    let mut console = cons.lock();
+        let mut console = cons.lock();
 
-    while n > 0 {
-        // Wait until interrupt handler has put
-        // some input into cons.buffer.
-        while console.read_index == console.write_index {
-            if killed(myproc()) != 0 {
-                // cons.lock.unlock();
-                return -1;
+        while n > 0 {
+            // Wait until interrupt handler has put
+            // some input into cons.buffer.
+            while console.read_index == console.write_index {
+                if killed(myproc()) != 0 {
+                    // cons.lock.unlock();
+                    return -1;
+                }
+                // let channel = addr_of_mut!(console.read_index).cast();
+                // console.sleep(channel);
+                sleep_mutex(addr_of_mut!(console.read_index).cast(), &mut console);
             }
-            // let channel = addr_of_mut!(console.read_index).cast();
-            // console.sleep(channel);
-            sleep_mutex(addr_of_mut!(console.read_index).cast(), &mut console);
-        }
 
-        c = *console.read_byte();
-        console.read_index += 1;
+            c = *console.read_byte();
+            console.read_index += 1;
 
-        // ctrl-D or EOF
-        if c == ctrl_x(b'D') {
-            if n < target {
-                // Save ctrl-D for next time, to make
-                // sure caller gets a 0-byte result.
-                console.read_index -= 1;
+            // ctrl-D or EOF
+            if c == ctrl_x(b'D') {
+                if n < target {
+                    // Save ctrl-D for next time, to make
+                    // sure caller gets a 0-byte result.
+                    console.read_index -= 1;
+                }
+                break;
             }
-            break;
+
+            // Copy the input byte to the user-space buffer.
+            cbuf = c;
+            if either_copyout(user_dst, dst, addr_of_mut!(cbuf).cast(), 1) == -1 {
+                break;
+            }
+
+            dst += 1;
+            n -= 1;
+
+            if c == b'\n' {
+                // A whole line has arrived,
+                // return to the user-level read().
+                break;
+            }
         }
 
-        // Copy the input byte to the user-space buffer.
-        cbuf = c;
-        if either_copyout(user_dst, dst, addr_of_mut!(cbuf).cast(), 1) == -1 {
-            break;
-        }
+        // cons.lock.unlock();
 
-        dst += 1;
-        n -= 1;
-
-        if c == b'\n' {
-            // A whole line has arrived,
-            // return to the user-level read().
-            break;
-        }
+        target - n
     }
-
-    // cons.lock.unlock();
-
-    target - n
 }
 
 pub unsafe fn consoleinit() {
@@ -163,8 +165,8 @@ pub unsafe fn consoleinit() {
 
     // Connect read and write syscalls
     // to consoleread and consolewrite.
-    devsw[CONSOLE].read = consoleread as usize as *const i32;
-    devsw[CONSOLE].write = consolewrite as usize as *const i32;
+    devsw[CONSOLE].read = Some(consoleread);
+    devsw[CONSOLE].write = Some(consolewrite);
 }
 
 /// The console input interrupt handler.

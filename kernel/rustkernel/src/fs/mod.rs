@@ -1,9 +1,13 @@
-//! On-disk file system forma.
+//! On-disk file system format.
 //! Both the kernel and user programs use this header file.
 
 pub mod file;
+pub mod log;
 pub mod ramdisk;
+pub mod stat;
 pub mod virtio_disk;
+
+use crate::fs::file::Inode;
 
 // Root inode
 pub const ROOTINO: u64 = 1;
@@ -36,9 +40,9 @@ pub struct Superblock {
 }
 
 pub const FSMAGIC: u32 = 0x10203040;
-pub const NDIRECT: u32 = 12;
-pub const NINDIRECT: u32 = BSIZE / core::mem::size_of::<u32>() as u32;
-pub const MAXFILE: u32 = NDIRECT + NINDIRECT;
+pub const NDIRECT: usize = 12;
+pub const NINDIRECT: usize = BSIZE as usize / core::mem::size_of::<u32>();
+pub const MAXFILE: usize = NDIRECT + NINDIRECT;
 
 // On-disk inode structure;
 #[repr(C)]
@@ -54,7 +58,7 @@ pub struct DiskInode {
     /// Size of file (bytes).
     pub size: u32,
     /// Data block addresses.
-    pub addrs: [u32; NDIRECT as usize + 1],
+    pub addrs: [u32; NDIRECT + 1],
 }
 
 /// Inodes per block.
@@ -83,5 +87,18 @@ pub struct DirectoryEntry {
 }
 
 extern "C" {
+    pub fn fsinit(dev: i32);
     pub fn iinit();
+    pub fn ialloc(dev: u32, kind: i16) -> *mut DiskInode;
+    pub fn iupdate(ip: *mut DiskInode);
+    pub fn idup(ip: *mut DiskInode) -> *mut DiskInode;
+    pub fn ilock(ip: *mut Inode);
+    pub fn iunlock(ip: *mut Inode);
+    pub fn iput(ip: *mut Inode);
+    pub fn iunlockput(ip: *mut DiskInode);
+    pub fn itrunc(ip: *mut DiskInode);
+    pub fn stati(ip: *mut Inode, st: *mut stat::Stat);
+    pub fn readi(ip: *mut Inode, user_dst: i32, dst: u64, off: u32, n: u32) -> i32;
+    pub fn writei(ip: *mut Inode, user_src: i32, src: u64, off: u32, n: u32) -> i32;
+    // pub fn namecmp()
 }
