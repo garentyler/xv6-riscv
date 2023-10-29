@@ -328,9 +328,7 @@ pub unsafe extern "C" fn sched() {
     let p = myproc();
     let c = mycpu();
 
-    if !(*p).lock.held_by_current_cpu() {
-        panic!("sched p->lock");
-    } else if (*c).interrupt_disable_layers != 1 {
+    if (*c).interrupt_disable_layers != 1 {
         panic!("sched locks");
     } else if (*p).state == ProcState::Running {
         panic!("sched running");

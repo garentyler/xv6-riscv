@@ -7,21 +7,18 @@ use crate::{
     riscv::{memlayout::PHYSTOP, pg_round_up, PGSIZE},
     sync::spinlock::Spinlock,
 };
-use core::{
-    ffi::{c_char, CStr},
-    ptr::{addr_of_mut, null_mut},
-};
+use core::ptr::{addr_of_mut, null_mut};
 
 extern "C" {
     // oh my god this is so stupid why the fuck
     // this took me so long to figure out it's 3am rn
     // First address after kernel. Defined by kernel.ld.
-    pub static mut end: [c_char; 0];
+    pub static mut end: [u8; 0];
 }
 
 #[no_mangle]
 pub static mut kmem: KernelMemory = KernelMemory {
-    lock: unsafe { Spinlock::uninitialized() },
+    lock: Spinlock::new(),
     freelist: null_mut(),
 };
 
@@ -37,12 +34,7 @@ pub struct KernelMemory {
 
 #[no_mangle]
 pub unsafe extern "C" fn kinit() {
-    kmem.lock = Spinlock::new(
-        CStr::from_bytes_with_nul(b"kmem\0")
-            .unwrap()
-            .as_ptr()
-            .cast_mut(),
-    );
+    kmem.lock = Spinlock::new();
     freerange(addr_of_mut!(end).cast(), PHYSTOP as *mut u8)
 }
 

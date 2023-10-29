@@ -4,7 +4,7 @@ use core::ffi::{c_char, CStr};
 pub use crate::panic;
 
 #[no_mangle]
-pub static mut PRINT_LOCK: Spinlock = unsafe { Spinlock::uninitialized() };
+pub static mut PRINT_LOCK: Spinlock = Spinlock::new();
 
 #[repr(C)]
 pub struct PrintLock {
@@ -48,9 +48,5 @@ pub unsafe extern "C" fn printstr(s: *const c_char) {
 
 #[no_mangle]
 pub unsafe extern "C" fn printfinit() {
-    PRINT_LOCK = Spinlock::new(
-        CStr::from_bytes_with_nul_unchecked(b"pr\0")
-            .as_ptr()
-            .cast_mut(),
-    );
+    PRINT_LOCK = Spinlock::new();
 }

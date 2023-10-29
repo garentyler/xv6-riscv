@@ -7,10 +7,7 @@ use crate::{
     proc::myproc,
     sync::{sleeplock::Sleeplock, spinlock::Spinlock},
 };
-use core::{
-    ffi::CStr,
-    ptr::{addr_of_mut, null_mut},
-};
+use core::ptr::{addr_of_mut, null_mut};
 
 #[repr(C)]
 #[derive(Copy, Clone, PartialEq, Default)]
@@ -121,7 +118,7 @@ pub struct FileTable {
 pub static mut devsw: [Devsw; crate::NDEV] = [Devsw::new(); crate::NDEV];
 #[no_mangle]
 pub static mut ftable: FileTable = FileTable {
-    lock: unsafe { Spinlock::uninitialized() },
+    lock: Spinlock::new(),
     files: unsafe { [File::uninitialized(); crate::NFILE] },
 };
 pub const CONSOLE: usize = 1;
@@ -137,12 +134,7 @@ extern "C" {
 }
 
 pub unsafe fn fileinit() {
-    ftable.lock = Spinlock::new(
-        CStr::from_bytes_with_nul(b"ftable\0")
-            .unwrap()
-            .as_ptr()
-            .cast_mut(),
-    );
+    ftable.lock = Spinlock::new();
 }
 
 /// Allocate a file structure.

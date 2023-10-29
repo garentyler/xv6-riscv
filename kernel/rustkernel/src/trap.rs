@@ -5,10 +5,7 @@ use crate::{
     sync::spinlock::Spinlock,
     syscall::syscall,
 };
-use core::{
-    ffi::{c_char, CStr},
-    ptr::{addr_of, addr_of_mut},
-};
+use core::ptr::{addr_of, addr_of_mut};
 
 extern "C" {
     pub fn kernelvec();
@@ -17,24 +14,19 @@ extern "C" {
     // fn syscall();
     // pub fn userret(satp: u64);
     fn virtio_disk_intr();
-    pub static mut trampoline: [c_char; 0];
-    pub static mut uservec: [c_char; 0];
-    pub static mut userret: [c_char; 0];
+    pub static mut trampoline: [u8; 0];
+    pub static mut uservec: [u8; 0];
+    pub static mut userret: [u8; 0];
 }
 
 #[no_mangle]
-pub static mut tickslock: Spinlock = unsafe { Spinlock::uninitialized() };
+pub static mut tickslock: Spinlock = Spinlock::new();
 #[no_mangle]
 pub static mut ticks: u32 = 0;
 
 #[no_mangle]
 pub unsafe extern "C" fn trapinit() {
-    tickslock = Spinlock::new(
-        CStr::from_bytes_with_nul(b"time\0")
-            .unwrap()
-            .as_ptr()
-            .cast_mut(),
-    );
+    tickslock = Spinlock::new();
 }
 
 /// Set up to take exceptions and traps while in the kernel.

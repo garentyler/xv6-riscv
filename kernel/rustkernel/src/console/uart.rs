@@ -9,7 +9,7 @@ use crate::{
     sync::spinmutex::SpinMutex,
     trap::InterruptBlocker,
 };
-use core::{ffi::CStr, ptr::addr_of_mut};
+use core::ptr::addr_of_mut;
 
 enum Register {
     ReceiveHolding,
@@ -115,7 +115,7 @@ const LSR_RX_READY: u8 = 1 << 0;
 /// THR can accept another character to send
 const LSR_TX_IDLE: u8 = 1 << 5;
 
-static mut uart_tx_lock: Spinlock = unsafe { Spinlock::uninitialized() };
+static mut uart_tx_lock: Spinlock = Spinlock::new();
 const UART_TX_BUF_SIZE: usize = 32;
 static mut uart_tx_buf: [u8; UART_TX_BUF_SIZE] = [0u8; UART_TX_BUF_SIZE];
 // static uart_tx_buf: SpinMutex<[u8; UART_TX_BUF_SIZE]> = SpinMutex::new([0u8; UART_TX_BUF_SIZE]);
@@ -143,12 +143,7 @@ pub(crate) unsafe fn uartinit() {
     // Enable transmit and receive interrupts.
     Register::InterruptEnable.write(IER_TX_ENABLE | IER_RX_ENABLE);
 
-    uart_tx_lock = Spinlock::new(
-        CStr::from_bytes_with_nul(b"uart\0")
-            .unwrap()
-            .as_ptr()
-            .cast_mut(),
-    );
+    uart_tx_lock = Spinlock::new();
 }
 
 /// Add a character to the output buffer and tell the

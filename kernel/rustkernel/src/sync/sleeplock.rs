@@ -18,7 +18,7 @@ impl Sleeplock {
     pub const unsafe fn uninitialized() -> Sleeplock {
         Sleeplock {
             locked: 0,
-            inner: Spinlock::uninitialized(),
+            inner: Spinlock::new(),
             name: null_mut(),
             pid: 0,
         }
@@ -27,7 +27,7 @@ impl Sleeplock {
     pub const fn new(name: *mut c_char) -> Sleeplock {
         Sleeplock {
             locked: 0,
-            inner: Spinlock::new(name),
+            inner: Spinlock::new(),
             name,
             pid: 0,
         }
