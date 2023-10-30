@@ -8,7 +8,6 @@ KERNEL_SOURCES = \
   bio.c \
   fs.c \
   log.c \
-  pipe.c \
   exec.c \
   sysfile.c \
   kernelvec.c \

@@ -1,12 +1,7 @@
 //! Low-level driver routines for 16550a UART.
 #![allow(non_upper_case_globals)]
 
-use crate::{
-    console::consoleintr,
-    proc::wakeup,
-    sync::spinlock::Spinlock,
-    trap::InterruptBlocker,
-};
+use crate::{console::consoleintr, proc::wakeup, sync::spinlock::Spinlock, trap::InterruptBlocker};
 use core::ptr::addr_of;
 
 // The UART control registers.
@@ -209,4 +204,3 @@ impl Uart {
         }
     }
 }
-

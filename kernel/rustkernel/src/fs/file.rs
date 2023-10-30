@@ -22,19 +22,19 @@ pub enum FileType {
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct File {
-    kind: FileType,
+    pub kind: FileType,
     /// Reference count.
-    references: i32,
-    readable: u8,
-    writable: u8,
+    pub references: i32,
+    pub readable: u8,
+    pub writable: u8,
     /// FileType::Pipe
-    pipe: *mut Pipe,
+    pub pipe: *mut Pipe,
     /// FileType::Inode and FileType::Device
-    ip: *mut Inode,
+    pub ip: *mut Inode,
     /// FileType::Inode
-    off: u32,
+    pub off: u32,
     /// FileType::Device
-    major: i16,
+    pub major: i16,
 }
 impl File {
     pub const unsafe fn uninitialized() -> File {

@@ -2,13 +2,15 @@
 #include "types.h"
 #include "riscv.h"
 
+#define PIPESIZE 512
+
 struct buf;
 struct context;
 struct file;
 struct inode;
+struct spinlock;
 struct pipe;
 struct proc;
-struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
