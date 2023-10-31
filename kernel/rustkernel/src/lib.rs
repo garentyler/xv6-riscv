@@ -13,6 +13,7 @@ pub mod fs;
 pub mod io;
 pub mod mem;
 pub mod proc;
+pub mod queue;
 pub(crate) mod riscv;
 pub mod start;
 pub mod string;

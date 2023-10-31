@@ -36,6 +36,11 @@ impl Pipe {
         }
     }
 }
+impl Default for Pipe {
+    fn default() -> Pipe {
+        Pipe::new()
+    }
+}
 
 extern "C" {
     // pub fn pipealloc(a: *mut *mut File, b: *mut *mut File) -> i32;
@@ -122,6 +127,7 @@ pub unsafe extern "C" fn pipewrite(pipe: *mut Pipe, addr: u64, n: i32) -> i32 {
 }
 
 #[no_mangle]
+#[allow(clippy::while_immutable_condition)]
 pub unsafe extern "C" fn piperead(pipe: *mut Pipe, addr: u64, n: i32) -> i32 {
     let mut i = 0;
     let p = myproc();

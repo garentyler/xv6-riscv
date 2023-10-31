@@ -1,7 +1,10 @@
 //! Low-level driver routines for 16550a UART.
 #![allow(non_upper_case_globals)]
 
-use crate::{console::consoleintr, proc::wakeup, sync::spinlock::Spinlock, trap::InterruptBlocker};
+use crate::{
+    console::consoleintr, proc::wakeup, queue::Queue, sync::spinlock::Spinlock,
+    trap::InterruptBlocker,
+};
 use core::ptr::addr_of;
 
 // The UART control registers.
@@ -21,8 +24,6 @@ const LCR_BAUD_LATCH: u8 = 1 << 7;
 const LSR_RX_READY: u8 = 1 << 0;
 /// THR can accept another character to send
 const LSR_TX_IDLE: u8 = 1 << 5;
-
-const UART_TX_BUF_SIZE: usize = 32;
 
 pub static UART0: Uart = Uart::new(crate::riscv::memlayout::UART0);
 
@@ -61,18 +62,14 @@ impl Register {
 pub struct Uart {
     pub lock: Spinlock,
     pub base_address: usize,
-    pub buffer: [u8; UART_TX_BUF_SIZE],
-    pub queue_start: usize,
-    pub queue_end: usize,
+    pub buffer: Queue<u8>,
 }
 impl Uart {
     pub const fn new(base_address: usize) -> Uart {
         Uart {
             lock: Spinlock::new(),
             base_address,
-            buffer: [0u8; UART_TX_BUF_SIZE],
-            queue_start: 0,
-            queue_end: 0,
+            buffer: Queue::new(),
         }
     }
     /// Initialize the UART.
@@ -146,7 +143,8 @@ impl Uart {
             }
         }
 
-        while self.queue_start == self.queue_end + 1 {
+        // Sleep until there is space in the buffer.
+        while self.buffer.space_remaining() == 0 {
             unsafe {
                 guard.sleep(addr_of!(*self).cast_mut().cast());
             }
@@ -157,10 +155,7 @@ impl Uart {
         let this: &mut Uart = unsafe { &mut *addr_of!(*self).cast_mut() };
 
         // Add the byte onto the end of the queue.
-        this.buffer[this.queue_end] = b;
-        this.queue_end += 1;
-        this.queue_end %= this.buffer.len();
-
+        this.buffer.push_back(b).expect("space in the uart queue");
         this.send_buffered_bytes();
     }
     pub fn write_slice_buffered(&self, bytes: &[u8]) {
@@ -175,14 +170,6 @@ impl Uart {
         let this: &mut Uart = unsafe { &mut *addr_of!(*self).cast_mut() };
 
         loop {
-            // Ensure the indices are correct.
-            this.queue_start %= this.buffer.len();
-            this.queue_end %= this.buffer.len();
-
-            if this.queue_start == this.queue_end {
-                // The buffer is empty, we're finished sending bytes.
-                return;
-            }
             if Register::LineStatus.read(this.base_address) & LSR_TX_IDLE == 0 {
                 // The UART transmit holding register is full,
                 // so we cannot give it another byte.
@@ -191,9 +178,10 @@ impl Uart {
             }
 
             // Pop a byte from the front of the queue.
-            let b = this.buffer[this.queue_start];
-            this.queue_start += 1;
-            this.queue_start %= this.buffer.len();
+            let Some(b) = this.buffer.pop_front() else {
+                // The buffer is empty, we're finished sending bytes.
+                return;
+            };
 
             // Maybe uartputc() is waiting for space in the buffer.
             unsafe {
