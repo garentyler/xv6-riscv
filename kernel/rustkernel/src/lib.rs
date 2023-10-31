@@ -21,13 +21,13 @@ pub mod sync;
 pub mod syscall;
 pub mod trap;
 
-use crate::proc::cpuid;
+use crate::{proc::cpuid, sync::mutex::Mutex};
 use core::ffi::{c_char, CStr};
 
 pub(crate) use crate::console::printf::{print, println};
 
 pub static mut STARTED: bool = false;
-pub static mut PANICKED: bool = false;
+pub static PANICKED: Mutex<bool> = Mutex::new(false);
 
 /// Maximum number of processes
 pub const NPROC: usize = 64;
@@ -65,7 +65,6 @@ pub unsafe extern "C" fn main() -> ! {
         mem::virtual_memory::kvminit();
         mem::virtual_memory::kvminithart();
         proc::procinit();
-        trap::trapinit();
         trap::trapinithart();
         riscv::plic::plicinit();
         riscv::plic::plicinithart();
@@ -113,7 +112,7 @@ fn panic_wrapper(panic_info: &core::panic::PanicInfo) -> ! {
     println!("╚═╝      ╚═════╝  ╚═════╝╚═╝  ╚═╝╚═╝╚═╝");
 
     unsafe {
-        crate::PANICKED = true;
+        *crate::PANICKED.lock_spinning() = true;
         // Quit QEMU for convenience.
         crate::syscall::Syscall::Shutdown.call();
     }

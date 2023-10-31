@@ -1,15 +1,17 @@
 use crate::{
+    mem::virtual_memory::{copyin, copyinstr},
     println,
-    proc::{self, myproc, sleep_lock},
-    riscv::{memlayout::QEMU_POWER, Pagetable},
+    proc::{self, myproc},
+    riscv::memlayout::QEMU_POWER,
     string::strlen,
+    trap::CLOCK_TICKS,
 };
-use core::{mem::size_of, ptr::addr_of_mut};
+use core::{
+    mem::size_of,
+    ptr::{addr_of, addr_of_mut},
+};
 
 extern "C" {
-    fn copyin(pagetable: Pagetable, dst: *mut u8, srcva: u64, len: u64) -> i32;
-    fn copyinstr(pagetable: Pagetable, dst: *mut u8, srcva: u64, len: u64) -> i32;
-    // fn syscall();
     fn sys_pipe() -> u64;
     fn sys_read() -> u64;
     fn sys_exec() -> u64;
@@ -87,26 +89,22 @@ impl Syscall {
                 }
             }
             Syscall::Sleep => {
-                use crate::trap::{ticks, tickslock};
-
                 let mut n = 0i32;
                 argint(0, addr_of_mut!(n));
 
-                let _guard = tickslock.lock();
-                while ticks < ticks + n as u32 {
+                let mut ticks = CLOCK_TICKS.lock_spinning();
+
+                while *ticks < *ticks + n as usize {
                     if proc::killed(myproc()) > 0 {
-                        tickslock.unlock();
                         return -1i64 as u64;
                     }
-                    sleep_lock(addr_of_mut!(ticks).cast(), addr_of_mut!(tickslock).cast())
+                    // Sleep until the value changes.
+                    ticks.sleep(addr_of!(CLOCK_TICKS).cast_mut().cast());
                 }
                 0
             }
             // Returns how many clock tick interrupts have occured since start.
-            Syscall::Uptime => {
-                let _guard = crate::trap::tickslock.lock();
-                crate::trap::ticks as u64
-            }
+            Syscall::Uptime => *CLOCK_TICKS.lock_spinning() as u64,
             Syscall::Open => sys_open(),
             Syscall::Write => sys_write(),
             Syscall::Mknod => sys_mknod(),

@@ -2,8 +2,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::{
-    console::consoleintr, proc::wakeup, queue::Queue, sync::mutex::Mutex,
-    trap::InterruptBlocker,
+    console::consoleintr, proc::wakeup, queue::Queue, sync::mutex::Mutex, trap::InterruptBlocker,
 };
 use core::ptr::addr_of;
 
@@ -111,7 +110,7 @@ impl Uart {
     pub fn write_byte(&self, b: u8) {
         let _ = InterruptBlocker::new();
 
-        if unsafe { crate::PANICKED } {
+        if *crate::PANICKED.lock_spinning() {
             loop {
                 core::hint::spin_loop();
             }
@@ -134,7 +133,7 @@ impl Uart {
     pub fn write_byte_buffered(&self, b: u8) {
         let mut buf = self.buffer.lock_spinning();
 
-        if unsafe { crate::PANICKED } {
+        if *crate::PANICKED.lock_spinning() {
             loop {
                 core::hint::spin_loop();
             }

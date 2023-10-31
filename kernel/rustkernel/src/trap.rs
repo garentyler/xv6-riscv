@@ -2,10 +2,10 @@ use crate::{
     println,
     proc::{cpuid, exit, killed, mycpu, myproc, r#yield, setkilled, wakeup, ProcState},
     riscv::*,
-    sync::spinlock::Spinlock,
+    sync::mutex::Mutex,
     syscall::syscall,
 };
-use core::ptr::{addr_of, addr_of_mut};
+use core::ptr::addr_of;
 
 extern "C" {
     pub fn kernelvec();
@@ -19,15 +19,7 @@ extern "C" {
     pub static mut userret: [u8; 0];
 }
 
-#[no_mangle]
-pub static mut tickslock: Spinlock = Spinlock::new();
-#[no_mangle]
-pub static mut ticks: u32 = 0;
-
-#[no_mangle]
-pub unsafe extern "C" fn trapinit() {
-    tickslock = Spinlock::new();
-}
+pub static CLOCK_TICKS: Mutex<usize> = Mutex::new(0);
 
 /// Set up to take exceptions and traps while in the kernel.
 #[no_mangle]
@@ -37,9 +29,12 @@ pub unsafe extern "C" fn trapinithart() {
 
 #[no_mangle]
 pub unsafe extern "C" fn clockintr() {
-    let _guard = tickslock.lock();
-    ticks += 1;
-    wakeup(addr_of_mut!(ticks).cast());
+    let mut ticks = CLOCK_TICKS.lock_spinning();
+
+    *ticks += 1;
+    unsafe {
+        wakeup(addr_of!(CLOCK_TICKS).cast_mut().cast());
+    }
 }
 
 /// Check if it's an external interrupt or software interrupt and handle it.
