@@ -325,7 +325,7 @@ pub unsafe extern "C" fn filewrite(file: *mut File, addr: u64, num_bytes: i32) -
                 }
             }
             if i == num_bytes {
-                num_bytes as i32
+                num_bytes
             } else {
                 -1
             }

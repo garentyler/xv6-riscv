@@ -2,8 +2,8 @@ use crate::{
     arch::riscv::memlayout::QEMU_POWER,
     fs::{
         self,
-        file::{self, File, Inode},
-        log::{self, LogOperation},
+        file::{self, File},
+        log::LogOperation,
         stat::KIND_DIR,
     },
     mem::virtual_memory::{copyin, copyinstr},
@@ -102,15 +102,14 @@ impl Syscall {
             }
             Syscall::Chdir => {
                 let mut path = [0u8; crate::MAXPATH];
-                let mut inode: *mut Inode = null_mut();
-                let mut p = myproc();
+                let p = myproc();
 
                 let _operation = LogOperation::new();
 
                 if argstr(0, addr_of_mut!(path).cast(), path.len() as i32) < 0 {
                     return -1i64 as u64;
                 }
-                inode = fs::namei(addr_of_mut!(path).cast());
+                let inode = fs::namei(addr_of_mut!(path).cast());
                 if inode.is_null() {
                     return -1i64 as u64;
                 }

@@ -33,6 +33,7 @@ pub struct Pipe {
     pub is_write_open: i32,
 }
 impl Pipe {
+    #[allow(clippy::new_ret_no_self)]
     pub unsafe fn new(a: *mut *mut File, b: *mut *mut File) -> Result<()> {
         *a = filealloc();
         *b = filealloc();
@@ -66,6 +67,7 @@ impl Pipe {
     /// Unsafely get a reference to `self`.
     ///
     /// `self.lock` must be held beforehand.
+    #[allow(clippy::mut_from_ref)]
     unsafe fn as_mut(&self) -> &mut Self {
         &mut *addr_of!(*self).cast_mut()
     }
