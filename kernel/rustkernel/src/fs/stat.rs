@@ -1,9 +1,6 @@
-#[repr(C)]
-pub enum StatType {
-    Directory = 1,
-    File,
-    Device,
-}
+pub const KIND_DIR: i16 = 1;
+pub const KIND_FILE: i16 = 2;
+pub const KIND_DEVICE: i16 = 3;
 
 #[repr(C)]
 #[derive(Default)]

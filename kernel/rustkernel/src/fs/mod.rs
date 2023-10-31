@@ -100,5 +100,6 @@ extern "C" {
     pub fn stati(ip: *mut Inode, st: *mut stat::Stat);
     pub fn readi(ip: *mut Inode, user_dst: i32, dst: u64, off: u32, n: u32) -> i32;
     pub fn writei(ip: *mut Inode, user_src: i32, src: u64, off: u32, n: u32) -> i32;
+    pub fn namei(path: *mut u8) -> *mut Inode;
     // pub fn namecmp()
 }

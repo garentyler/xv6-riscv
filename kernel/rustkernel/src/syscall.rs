@@ -1,30 +1,33 @@
 use crate::{
     arch::riscv::memlayout::QEMU_POWER,
+    fs::{
+        self,
+        file::{self, File, Inode},
+        log::{self, LogOperation},
+        stat::KIND_DIR,
+    },
     mem::virtual_memory::{copyin, copyinstr},
     println,
     proc::{self, myproc},
     string::strlen,
     trap::CLOCK_TICKS,
+    NOFILE,
 };
 use core::{
     mem::size_of,
-    ptr::{addr_of, addr_of_mut},
+    ptr::{addr_of, addr_of_mut, null_mut},
 };
 
 extern "C" {
     fn sys_pipe() -> u64;
-    fn sys_read() -> u64;
     fn sys_exec() -> u64;
     fn sys_fstat() -> u64;
     fn sys_chdir() -> u64;
-    fn sys_dup() -> u64;
     fn sys_open() -> u64;
-    fn sys_write() -> u64;
     fn sys_mknod() -> u64;
     fn sys_unlink() -> u64;
     fn sys_link() -> u64;
     fn sys_mkdir() -> u64;
-    fn sys_close() -> u64;
 }
 
 pub enum Syscall {
@@ -66,16 +69,76 @@ impl Syscall {
                 proc::wait(p) as u64
             }
             Syscall::Pipe => sys_pipe(),
-            Syscall::Read => sys_read(),
+            Syscall::Read => {
+                let mut file: *mut File = null_mut();
+                let mut num_bytes: i32 = 0;
+                let mut ptr: u64 = 0;
+
+                if argfd(0, null_mut(), addr_of_mut!(file)) >= 0 {
+                    argaddr(1, addr_of_mut!(ptr));
+                    argint(2, addr_of_mut!(num_bytes));
+                    file::fileread(file, ptr, num_bytes) as i64 as u64
+                } else {
+                    -1i64 as u64
+                }
+            }
             Syscall::Kill => {
                 let mut pid = 0i32;
                 argint(0, addr_of_mut!(pid));
                 proc::kill(pid) as u64
             }
             Syscall::Exec => sys_exec(),
-            Syscall::Fstat => sys_fstat(),
-            Syscall::Chdir => sys_chdir(),
-            Syscall::Dup => sys_dup(),
+            Syscall::Fstat => {
+                let mut file: *mut File = null_mut();
+                // User pointer to struct stat.
+                let mut stat: u64 = 0;
+
+                if argfd(0, null_mut(), addr_of_mut!(file)) >= 0 {
+                    argaddr(1, addr_of_mut!(stat));
+                    file::filestat(file, stat) as i64 as u64
+                } else {
+                    -1i64 as u64
+                }
+            }
+            Syscall::Chdir => {
+                let mut path = [0u8; crate::MAXPATH];
+                let mut inode: *mut Inode = null_mut();
+                let mut p = myproc();
+
+                let _operation = LogOperation::new();
+
+                if argstr(0, addr_of_mut!(path).cast(), path.len() as i32) < 0 {
+                    return -1i64 as u64;
+                }
+                inode = fs::namei(addr_of_mut!(path).cast());
+                if inode.is_null() {
+                    return -1i64 as u64;
+                }
+                fs::ilock(inode);
+                if (*inode).kind != KIND_DIR {
+                    fs::iunlock(inode);
+                    fs::iput(inode);
+                    return -1i64 as u64;
+                }
+                fs::iunlock(inode);
+                fs::iput((*p).cwd);
+                (*p).cwd = inode;
+                0
+            }
+            Syscall::Dup => {
+                let mut file: *mut File = null_mut();
+
+                if argfd(0, null_mut(), addr_of_mut!(file)) < 0 {
+                    return -1i64 as u64;
+                }
+
+                let Ok(file_descriptor) = fdalloc(file) else {
+                    return -1i64 as u64;
+                };
+
+                file::filedup(file);
+                file_descriptor as u64
+            }
             Syscall::Getpid => (*myproc()).pid as u64,
             Syscall::Sbrk => {
                 let mut n = 0i32;
@@ -106,12 +169,36 @@ impl Syscall {
             // Returns how many clock tick interrupts have occured since start.
             Syscall::Uptime => *CLOCK_TICKS.lock_spinning() as u64,
             Syscall::Open => sys_open(),
-            Syscall::Write => sys_write(),
+            Syscall::Write => {
+                let mut file: *mut File = null_mut();
+                let mut num_bytes: i32 = 0;
+                let mut ptr: u64 = 0;
+
+                if argfd(0, null_mut(), addr_of_mut!(file)) >= 0 {
+                    argaddr(1, addr_of_mut!(ptr));
+                    argint(2, addr_of_mut!(num_bytes));
+                    file::filewrite(file, ptr, num_bytes) as i64 as u64
+                } else {
+                    -1i64 as u64
+                }
+            }
+
             Syscall::Mknod => sys_mknod(),
             Syscall::Unlink => sys_unlink(),
             Syscall::Link => sys_link(),
             Syscall::Mkdir => sys_mkdir(),
-            Syscall::Close => sys_close(),
+            Syscall::Close => {
+                let mut file_descriptor: i32 = 0;
+                let mut file: *mut File = null_mut();
+
+                if argfd(0, addr_of_mut!(file_descriptor), addr_of_mut!(file)) >= 0 {
+                    (*myproc()).ofile[file_descriptor as usize] = null_mut();
+                    file::fileclose(file);
+                    0
+                } else {
+                    -1i64 as u64
+                }
+            }
             Syscall::Shutdown => {
                 let qemu_power = QEMU_POWER as usize as *mut u32;
                 qemu_power.write_volatile(0x5555u32);
@@ -214,10 +301,22 @@ pub unsafe extern "C" fn fetchstr(addr: u64, buf: *mut u8, max: i32) -> i32 {
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn argraw(n: i32) -> u64 {
+/// Allocate a file descriptor for the given file.
+/// Takes over file reference from caller on success.
+unsafe fn fdalloc(file: *mut File) -> Result<usize, ()> {
     let p = myproc();
-    match n {
+    for file_descriptor in 0..crate::NOFILE {
+        if (*p).ofile[file_descriptor].is_null() {
+            (*p).ofile[file_descriptor] = file;
+            return Ok(file_descriptor);
+        }
+    }
+    Err(())
+}
+
+unsafe fn argraw(argument_index: usize) -> u64 {
+    let p = myproc();
+    match argument_index {
         0 => (*(*p).trapframe).a0,
         1 => (*(*p).trapframe).a1,
         2 => (*(*p).trapframe).a2,
@@ -231,7 +330,7 @@ pub unsafe extern "C" fn argraw(n: i32) -> u64 {
 /// Fetch the n-th 32-bit syscall argument.
 #[no_mangle]
 pub unsafe extern "C" fn argint(n: i32, ip: *mut i32) {
-    *ip = argraw(n) as i32;
+    *ip = argraw(n as usize) as i32;
 }
 
 /// Retrieve an argument as a pointer.
@@ -240,7 +339,34 @@ pub unsafe extern "C" fn argint(n: i32, ip: *mut i32) {
 /// copyin/copyout will do that.
 #[no_mangle]
 pub unsafe extern "C" fn argaddr(n: i32, ip: *mut u64) {
-    *ip = argraw(n);
+    *ip = argraw(n as usize);
+}
+
+/// Fetch the n-th word-sized syscall argument as a file descriptor
+/// and return both the descriptor and the corresponding struct file.
+#[no_mangle]
+pub unsafe extern "C" fn argfd(
+    n: i32,
+    file_descriptor_out: *mut i32,
+    file_out: *mut *mut File,
+) -> i32 {
+    let file_descriptor = argraw(n as usize) as usize;
+    if file_descriptor >= NOFILE {
+        return -1;
+    }
+
+    let file: *mut File = (*myproc()).ofile[file_descriptor];
+    if file.is_null() {
+        return -1;
+    }
+
+    if !file_descriptor_out.is_null() {
+        *file_descriptor_out = file_descriptor as i32;
+    }
+    if !file_out.is_null() {
+        *file_out = file;
+    }
+    0
 }
 
 /// Fetch the n-th word-sized syscall argument as a null-terminated string.

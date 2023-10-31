@@ -54,23 +54,28 @@ impl File {
 #[repr(C)]
 pub struct Inode {
     /// Device number.
-    device: u32,
+    pub device: u32,
     /// Inode number.
-    inum: u32,
+    pub inum: u32,
     /// Reference count.
-    references: i32,
+    pub references: i32,
 
-    lock: Sleeplock,
+    pub lock: Sleeplock,
     /// Inode has been read from disk?
-    valid: i32,
+    pub valid: i32,
 
     // Copy of DiskInode
-    kind: i16,
-    major: i16,
-    minor: i16,
-    num_links: i16,
-    size: u32,
-    addresses: [u32; crate::fs::NDIRECT + 1],
+    pub kind: i16,
+    pub major: i16,
+    pub minor: i16,
+    pub num_links: i16,
+    pub size: u32,
+    pub addresses: [u32; crate::fs::NDIRECT + 1],
+}
+impl Inode {
+    pub fn lock(&mut self) -> InodeLockGuard<'_> {
+        InodeLockGuard::new(self)
+    }
 }
 
 pub struct InodeLockGuard<'i> {
@@ -236,7 +241,10 @@ pub unsafe extern "C" fn fileread(file: *mut File, addr: u64, num_bytes: i32) ->
     }
 
     match (*file).kind {
-        FileType::Pipe => (*(*file).pipe).read(addr, num_bytes as usize).map(|n| n as i32).unwrap_or(-1i32),
+        FileType::Pipe => (*(*file).pipe)
+            .read(addr, num_bytes as usize)
+            .map(|n| n as i32)
+            .unwrap_or(-1i32),
         FileType::Device => {
             if (*file).major < 0 || (*file).major >= crate::NDEV as i16 {
                 return -1;
@@ -269,7 +277,10 @@ pub unsafe extern "C" fn filewrite(file: *mut File, addr: u64, num_bytes: i32) -
     }
 
     match (*file).kind {
-        FileType::Pipe => (*(*file).pipe).write(addr, num_bytes as usize).map(|n| n as i32).unwrap_or(-1i32),
+        FileType::Pipe => (*(*file).pipe)
+            .write(addr, num_bytes as usize)
+            .map(|n| n as i32)
+            .unwrap_or(-1i32),
         FileType::Device => {
             if (*file).major < 0 || (*file).major >= crate::NDEV as i16 {
                 return -1;

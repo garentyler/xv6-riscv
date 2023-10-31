@@ -2,6 +2,7 @@
 
 use crate::{
     arch::riscv::{intr_get, r_tp, Pagetable, PTE_W},
+    fs::file::{File, Inode},
     mem::kalloc::kfree,
     sync::spinlock::{Spinlock, SpinlockGuard},
 };
@@ -214,9 +215,9 @@ pub struct Proc {
     /// swtch() here to run process
     pub context: Context,
     /// Open files
-    pub ofile: *mut u8, // TODO: Change u8 ptr to File ptr.
+    pub ofile: [*mut File; crate::NOFILE],
     /// Current directory
-    pub cwd: *mut u8, // TODO: Change u8 ptr to inode ptr.
+    pub cwd: *mut Inode,
     /// Process name (debugging)
     pub name: [c_char; 16],
 }
