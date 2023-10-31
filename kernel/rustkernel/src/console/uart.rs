@@ -2,7 +2,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::{
-    console::consoleintr, proc::wakeup, queue::Queue, sync::spinlock::Spinlock,
+    console::consoleintr, proc::wakeup, queue::Queue, sync::mutex::Mutex,
     trap::InterruptBlocker,
 };
 use core::ptr::addr_of;
@@ -60,16 +60,14 @@ impl Register {
 }
 
 pub struct Uart {
-    pub lock: Spinlock,
     pub base_address: usize,
-    pub buffer: Queue<u8>,
+    pub buffer: Mutex<Queue<u8>>,
 }
 impl Uart {
     pub const fn new(base_address: usize) -> Uart {
         Uart {
-            lock: Spinlock::new(),
             base_address,
-            buffer: Queue::new(),
+            buffer: Mutex::new(Queue::new()),
         }
     }
     /// Initialize the UART.
@@ -97,7 +95,6 @@ impl Uart {
         }
 
         // Send buffered characters.
-        let _guard = self.lock.lock();
         self.send_buffered_bytes();
     }
     /// Read one byte from the UART.
@@ -135,7 +132,7 @@ impl Uart {
     /// Write a byte to the UART and buffer it.
     /// Should not be used in interrupts.
     pub fn write_byte_buffered(&self, b: u8) {
-        let guard = self.lock.lock();
+        let mut buf = self.buffer.lock_spinning();
 
         if unsafe { crate::PANICKED } {
             loop {
@@ -144,19 +141,17 @@ impl Uart {
         }
 
         // Sleep until there is space in the buffer.
-        while self.buffer.space_remaining() == 0 {
+        while buf.space_remaining() == 0 {
             unsafe {
-                guard.sleep(addr_of!(*self).cast_mut().cast());
+                buf.sleep(addr_of!(*self).cast_mut().cast());
             }
         }
 
-        // Unsafely cast self as mutable.
-        // self.lock is held so it should be fine.
-        let this: &mut Uart = unsafe { &mut *addr_of!(*self).cast_mut() };
-
         // Add the byte onto the end of the queue.
-        this.buffer.push_back(b).expect("space in the uart queue");
-        this.send_buffered_bytes();
+        buf.push_back(b).expect("space in the uart queue");
+        // Drop buf so that send_buffered_bytes() can lock it again.
+        core::mem::drop(buf);
+        self.send_buffered_bytes();
     }
     pub fn write_slice_buffered(&self, bytes: &[u8]) {
         for b in bytes {
@@ -167,10 +162,10 @@ impl Uart {
     /// waiting in the transmit buffer, send it.
     /// self.lock should be held.
     fn send_buffered_bytes(&self) {
-        let this: &mut Uart = unsafe { &mut *addr_of!(*self).cast_mut() };
+        let mut buf = self.buffer.lock_spinning();
 
         loop {
-            if Register::LineStatus.read(this.base_address) & LSR_TX_IDLE == 0 {
+            if Register::LineStatus.read(self.base_address) & LSR_TX_IDLE == 0 {
                 // The UART transmit holding register is full,
                 // so we cannot give it another byte.
                 // It will interrupt when it's ready for a new byte.
@@ -178,7 +173,7 @@ impl Uart {
             }
 
             // Pop a byte from the front of the queue.
-            let Some(b) = this.buffer.pop_front() else {
+            let Some(b) = buf.pop_front() else {
                 // The buffer is empty, we're finished sending bytes.
                 return;
             };
@@ -188,7 +183,7 @@ impl Uart {
                 wakeup(addr_of!(*self).cast_mut().cast());
             }
 
-            Register::TransmitHolding.write(this.base_address, b);
+            Register::TransmitHolding.write(self.base_address, b);
         }
     }
 }
