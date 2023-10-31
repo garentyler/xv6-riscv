@@ -2,7 +2,7 @@
 
 use crate::{
     mem::kalloc::kfree,
-    riscv::{self, Pagetable, PTE_W},
+    arch::riscv::{Pagetable, PTE_W, intr_get, r_tp},
     sync::spinlock::{Spinlock, SpinlockGuard},
 };
 use core::{
@@ -226,7 +226,7 @@ pub struct Proc {
 /// to a different CPU.
 #[no_mangle]
 pub unsafe extern "C" fn cpuid() -> i32 {
-    riscv::r_tp() as i32
+    r_tp() as i32
 }
 
 /// Return this CPU's cpu struct.
@@ -331,7 +331,7 @@ pub unsafe extern "C" fn sched() {
         panic!("sched locks");
     } else if (*p).state == ProcState::Running {
         panic!("sched running");
-    } else if riscv::intr_get() > 0 {
+    } else if intr_get() > 0 {
         panic!("sched interruptible");
     }
 

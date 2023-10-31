@@ -14,7 +14,7 @@ pub mod io;
 pub mod mem;
 pub mod proc;
 pub mod queue;
-pub(crate) mod riscv;
+pub(crate) mod arch;
 pub mod start;
 pub mod string;
 pub mod sync;
@@ -66,8 +66,8 @@ pub unsafe extern "C" fn main() -> ! {
         mem::virtual_memory::kvminithart();
         proc::procinit();
         trap::trapinithart();
-        riscv::plic::plicinit();
-        riscv::plic::plicinithart();
+        arch::riscv::plic::plicinit();
+        arch::riscv::plic::plicinithart();
         io::bio::binit();
         fs::iinit();
         fs::file::fileinit();
@@ -80,7 +80,7 @@ pub unsafe extern "C" fn main() -> ! {
         }
         mem::virtual_memory::kvminithart();
         trap::trapinithart();
-        riscv::plic::plicinithart();
+        arch::riscv::plic::plicinithart();
     }
 
     proc::scheduler();

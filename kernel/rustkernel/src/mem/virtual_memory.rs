@@ -4,7 +4,7 @@ use crate::{
         memmove, memset,
     },
     proc::proc_mapstacks,
-    riscv::{
+    arch::riscv::{
         memlayout::{KERNBASE, PHYSTOP, TRAMPOLINE},
         *,
     },

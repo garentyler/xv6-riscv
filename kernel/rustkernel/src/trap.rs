@@ -1,7 +1,7 @@
 use crate::{
     println,
     proc::{cpuid, exit, killed, mycpu, myproc, r#yield, setkilled, wakeup, ProcState},
-    riscv::*,
+    arch::riscv::*,
     sync::mutex::Mutex,
     syscall::syscall,
 };
@@ -272,10 +272,10 @@ pub unsafe extern "C" fn usertrap() {
 
 #[no_mangle]
 pub unsafe extern "C" fn push_intr_off() {
-    let old = crate::riscv::intr_get();
+    let old = intr_get();
     let cpu = mycpu();
 
-    crate::riscv::intr_off();
+    intr_off();
     if (*cpu).interrupt_disable_layers == 0 {
         (*cpu).previous_interrupts_enabled = old;
     }
@@ -285,7 +285,7 @@ pub unsafe extern "C" fn push_intr_off() {
 pub unsafe extern "C" fn pop_intr_off() {
     let cpu = mycpu();
 
-    if crate::riscv::intr_get() == 1 {
+    if intr_get() == 1 {
         // crate::panic_byte(b'0');
         panic!("pop_intr_off - interruptible");
     } else if (*cpu).interrupt_disable_layers < 1 {
@@ -296,6 +296,6 @@ pub unsafe extern "C" fn pop_intr_off() {
     (*cpu).interrupt_disable_layers -= 1;
 
     if (*cpu).interrupt_disable_layers == 0 && (*cpu).previous_interrupts_enabled == 1 {
-        crate::riscv::intr_on();
+        intr_on();
     }
 }

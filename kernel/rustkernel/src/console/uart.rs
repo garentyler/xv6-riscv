@@ -24,7 +24,7 @@ const LSR_RX_READY: u8 = 1 << 0;
 /// THR can accept another character to send
 const LSR_TX_IDLE: u8 = 1 << 5;
 
-pub static UART0: Uart = Uart::new(crate::riscv::memlayout::UART0);
+pub static UART0: Uart = Uart::new(crate::arch::riscv::memlayout::UART0);
 
 enum Register {
     ReceiveHolding,

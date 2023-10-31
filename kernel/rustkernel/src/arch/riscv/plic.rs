@@ -2,7 +2,7 @@
 
 use crate::{
     proc::cpuid,
-    riscv::{plic_sclaim, plic_senable, plic_spriority, PLIC, UART0_IRQ, VIRTIO0_IRQ},
+    arch::riscv::{plic_sclaim, plic_senable, plic_spriority, PLIC, UART0_IRQ, VIRTIO0_IRQ},
 };
 
 #[no_mangle]

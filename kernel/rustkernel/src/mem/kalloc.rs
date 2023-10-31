@@ -4,7 +4,7 @@
 
 use crate::{
     mem::memset,
-    riscv::{memlayout::PHYSTOP, pg_round_up, PGSIZE},
+    arch::riscv::{memlayout::PHYSTOP, pg_round_up, PGSIZE},
     sync::spinlock::Spinlock,
 };
 use core::ptr::{addr_of_mut, null_mut};

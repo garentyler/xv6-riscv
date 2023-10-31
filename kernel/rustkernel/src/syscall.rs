@@ -2,7 +2,7 @@ use crate::{
     mem::virtual_memory::{copyin, copyinstr},
     println,
     proc::{self, myproc},
-    riscv::memlayout::QEMU_POWER,
+    arch::riscv::memlayout::QEMU_POWER,
     string::strlen,
     trap::CLOCK_TICKS,
 };

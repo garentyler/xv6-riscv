@@ -1,4 +1,4 @@
-use crate::{main, riscv::*, NCPU};
+use crate::{main, arch::riscv::*, NCPU};
 use core::{arch::asm, ptr::addr_of};
 
 extern "C" {
