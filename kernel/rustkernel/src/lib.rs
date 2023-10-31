@@ -24,7 +24,7 @@ pub mod trap;
 use crate::proc::cpuid;
 use core::ffi::{c_char, CStr};
 
-pub(crate) use crate::console::printf::print;
+pub(crate) use crate::console::printf::{print, println};
 
 pub static mut STARTED: bool = false;
 pub static mut PANICKED: bool = false;
@@ -60,9 +60,8 @@ pub const MAXPATH: usize = 128;
 pub unsafe extern "C" fn main() -> ! {
     if cpuid() == 0 {
         console::consoleinit();
-        console::printf::printfinit();
         mem::kalloc::kinit();
-        print!("\nxv6 kernel is booting\n");
+        println!("\nxv6 kernel is booting");
         mem::virtual_memory::kvminit();
         mem::virtual_memory::kvminithart();
         proc::procinit();
@@ -97,21 +96,21 @@ fn panic_wrapper(panic_info: &core::panic::PanicInfo) -> ! {
     }
 
     if let Some(s) = panic_info.message() {
-        print!("{}\n", s);
+        println!("{}", s);
     } else if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
-        print!("{}\n", s);
+        println!("{}", s);
     } else if let Some(s) = panic_info.payload().downcast_ref::<&CStr>() {
-        print!("{:?}\n", s);
+        println!("{:?}", s);
     } else {
-        print!("could not recover error message\n");
+        println!("could not recover error message");
     }
 
-    print!("███████╗██╗   ██╗ ██████╗██╗  ██╗██╗██╗\n");
-    print!("██╔════╝██║   ██║██╔════╝██║ ██╔╝██║██║\n");
-    print!("█████╗  ██║   ██║██║     █████╔╝ ██║██║\n");
-    print!("██╔══╝  ██║   ██║██║     ██╔═██╗ ╚═╝╚═╝\n");
-    print!("██║     ╚██████╔╝╚██████╗██║  ██╗██╗██╗\n");
-    print!("╚═╝      ╚═════╝  ╚═════╝╚═╝  ╚═╝╚═╝╚═╝\n");
+    println!("███████╗██╗   ██╗ ██████╗██╗  ██╗██╗██╗");
+    println!("██╔════╝██║   ██║██╔════╝██║ ██╔╝██║██║");
+    println!("█████╗  ██║   ██║██║     █████╔╝ ██║██║");
+    println!("██╔══╝  ██║   ██║██║     ██╔═██╗ ╚═╝╚═╝");
+    println!("██║     ╚██████╔╝╚██████╗██║  ██╗██╗██╗");
+    println!("╚═╝      ╚═════╝  ╚═════╝╚═╝  ╚═╝╚═╝╚═╝");
 
     unsafe {
         crate::PANICKED = true;

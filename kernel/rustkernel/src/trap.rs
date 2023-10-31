@@ -1,5 +1,5 @@
 use crate::{
-    console::printf::print,
+    println,
     proc::{cpuid, exit, killed, mycpu, myproc, r#yield, setkilled, wakeup, ProcState},
     riscv::*,
     sync::spinlock::Spinlock,
@@ -60,7 +60,7 @@ pub unsafe extern "C" fn devintr() -> i32 {
         } else if irq == VIRTIO0_IRQ {
             virtio_disk_intr();
         } else if irq > 0 {
-            print!("unexpected interrupt irq={}\n", irq);
+            println!("unexpected interrupt irq={}", irq);
         }
 
         // The PLIC allows each device to raise at most one
@@ -198,7 +198,7 @@ pub unsafe extern "C" fn kerneltrap() {
 
     let which_dev = devintr();
     if which_dev == 0 {
-        print!("scause {}\nsepc={} stval={}\n", scause, r_sepc(), r_stval());
+        println!("scause {}\nsepc={} stval={}", scause, r_sepc(), r_stval());
         panic!("kerneltrap");
     } else if which_dev == 2 && !myproc().is_null() && (*myproc()).state == ProcState::Running {
         // Give up the CPU if this is a timer interrupt.
@@ -249,7 +249,7 @@ pub unsafe extern "C" fn usertrap() {
 
     let which_dev = devintr();
     if r_scause() != 8 && which_dev == 0 {
-        print!(
+        println!(
             "usertrap(): unexpected scause {} {}\n\tsepc={} stval={}",
             r_scause(),
             (*p).pid,

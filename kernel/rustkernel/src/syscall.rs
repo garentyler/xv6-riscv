@@ -1,5 +1,5 @@
 use crate::{
-    console::printf::print,
+    println,
     proc::{self, myproc, sleep_lock},
     riscv::{memlayout::QEMU_POWER, Pagetable},
     string::strlen,
@@ -261,25 +261,11 @@ pub unsafe extern "C" fn syscall() {
     let p = myproc();
     let num = (*(*p).trapframe).a7;
 
-    // print!("syscall {}\n", num);
-
     (*(*p).trapframe).a0 = match TryInto::<Syscall>::try_into(num as usize) {
         Ok(syscall) => syscall.call(),
         Err(_) => {
-            print!("{} unknown syscall {}\n", (*p).pid, num);
+            println!("{} unknown syscall {}", (*p).pid, num);
             -1i64 as u64
         }
     };
 }
-
-// #[no_mangle]
-// pub unsafe extern "C" fn rust_syscall(num: u64) -> u64 {
-//     match TryInto::<Syscall>::try_into(num as usize) {
-//         Ok(syscall) => syscall.call(),
-//         Err(_) => {
-//             print!("unknown syscall {}\n", num);
-//             -1i64 as u64
-//         }
-//     }
-// }
-//

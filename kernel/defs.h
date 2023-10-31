@@ -83,7 +83,6 @@ int             pipewrite(struct pipe*, uint64, int);
 
 // printf.c
 __attribute__((noreturn)) void panic(char *s);
-void printfinit(void);
 void printstr(char *s);
 void printint(int n);
 void printhex(int n);

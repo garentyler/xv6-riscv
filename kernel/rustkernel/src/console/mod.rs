@@ -14,7 +14,7 @@ pub mod uart;
 use crate::{
     fs::file::{devsw, CONSOLE},
     proc::{killed, myproc, procdump, wakeup},
-    sync::spinmutex::SpinMutex,
+    sync::mutex::Mutex,
 };
 use core::{ffi::c_void, ptr::addr_of_mut};
 use uart::UART0;
@@ -54,7 +54,7 @@ impl core::fmt::Write for Console {
 }
 
 #[no_mangle]
-pub static cons: SpinMutex<Console> = SpinMutex::new(Console {
+pub static cons: Mutex<Console> = Mutex::new(Console {
     buffer: [0u8; INPUT_BUF_SIZE],
     read_index: 0,
     write_index: 0,
@@ -108,7 +108,7 @@ pub fn consoleread(user_dst: i32, mut dst: u64, mut n: i32) -> i32 {
         let mut c;
         let mut cbuf;
 
-        let mut console = cons.lock();
+        let mut console = cons.lock_spinning();
 
         while n > 0 {
             // Wait until interrupt handler has put
@@ -172,7 +172,7 @@ pub unsafe fn consoleinit() {
 /// Do erase/kill processing, then append to cons.buf.
 /// Wake up consoleread() if a whole line has arrived.
 pub fn consoleintr(mut c: u8) {
-    let mut console = cons.lock();
+    let mut console = cons.lock_spinning();
 
     if c == ctrl_x(b'P') {
         // Print process list.
