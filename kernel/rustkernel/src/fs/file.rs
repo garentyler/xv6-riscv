@@ -2,7 +2,7 @@
 
 use crate::{
     fs::{log, stat::Stat},
-    io::pipe::{self, Pipe},
+    io::pipe::Pipe,
     mem::virtual_memory::copyout,
     proc::myproc,
     sync::{sleeplock::Sleeplock, spinlock::Spinlock},
@@ -186,7 +186,7 @@ pub unsafe extern "C" fn fileclose(file: *mut File) {
         core::mem::drop(guard);
 
         match f.kind {
-            FileType::Pipe => pipe::pipeclose(f.pipe, f.writable as i32),
+            FileType::Pipe => (*f.pipe).close(f.writable as i32),
             FileType::Inode | FileType::Device => {
                 let _operation = log::LogOperation::new();
                 super::iput(f.ip);
@@ -230,13 +230,13 @@ pub unsafe extern "C" fn filestat(file: *mut File, addr: u64) -> i32 {
 ///
 /// `addr` is a user virtual address.
 #[no_mangle]
-pub unsafe extern "C" fn fileread(file: *mut File, addr: u64, n: i32) -> i32 {
+pub unsafe extern "C" fn fileread(file: *mut File, addr: u64, num_bytes: i32) -> i32 {
     if (*file).readable == 0 {
         return -1;
     }
 
     match (*file).kind {
-        FileType::Pipe => pipe::piperead((*file).pipe, addr, n),
+        FileType::Pipe => (*(*file).pipe).read(addr, num_bytes as usize).map(|n| n as i32).unwrap_or(-1i32),
         FileType::Device => {
             if (*file).major < 0 || (*file).major >= crate::NDEV as i16 {
                 return -1;
@@ -245,11 +245,11 @@ pub unsafe extern "C" fn fileread(file: *mut File, addr: u64, n: i32) -> i32 {
                 return -1;
             };
 
-            read(1, addr, n)
+            read(1, addr, num_bytes)
         }
         FileType::Inode => {
             let _guard = InodeLockGuard::new((*file).ip.as_mut().unwrap());
-            let r = super::readi((*file).ip, 1, addr, (*file).off, n as u32);
+            let r = super::readi((*file).ip, 1, addr, (*file).off, num_bytes as u32);
             if r > 0 {
                 (*file).off += r as u32;
             }
@@ -263,13 +263,13 @@ pub unsafe extern "C" fn fileread(file: *mut File, addr: u64, n: i32) -> i32 {
 ///
 /// `addr` is as user virtual address.
 #[no_mangle]
-pub unsafe extern "C" fn filewrite(file: *mut File, addr: u64, n: i32) -> i32 {
+pub unsafe extern "C" fn filewrite(file: *mut File, addr: u64, num_bytes: i32) -> i32 {
     if (*file).writable == 0 {
         return -1;
     }
 
     match (*file).kind {
-        FileType::Pipe => pipe::pipewrite((*file).pipe, addr, n),
+        FileType::Pipe => (*(*file).pipe).write(addr, num_bytes as usize).map(|n| n as i32).unwrap_or(-1i32),
         FileType::Device => {
             if (*file).major < 0 || (*file).major >= crate::NDEV as i16 {
                 return -1;
@@ -278,7 +278,7 @@ pub unsafe extern "C" fn filewrite(file: *mut File, addr: u64, n: i32) -> i32 {
                 return -1;
             };
 
-            write(1, addr, n)
+            write(1, addr, num_bytes)
         }
         FileType::Inode => {
             // Write a few blocks at a time to avoid exceeding
@@ -289,32 +289,32 @@ pub unsafe extern "C" fn filewrite(file: *mut File, addr: u64, n: i32) -> i32 {
             // might be writing a device like the console.
             let max = ((crate::MAXOPBLOCKS - 1 - 1 - 2) / 2) * super::BSIZE as usize;
             let mut i = 0;
-            while i < n {
-                let mut n1 = n - i;
-                if n1 > max as i32 {
-                    n1 = max as i32;
+            while i < num_bytes {
+                let mut n = num_bytes - i;
+                if n > max as i32 {
+                    n = max as i32;
                 }
 
                 let r = {
                     let _operation = log::LogOperation::new();
                     let _guard = InodeLockGuard::new((*file).ip.as_mut().unwrap());
 
-                    let r = super::writei((*file).ip, 1, addr + i as u64, (*file).off, n1 as u32);
+                    let r = super::writei((*file).ip, 1, addr + i as u64, (*file).off, n as u32);
                     if r > 0 {
                         (*file).off += r as u32;
                     }
                     r
                 };
 
-                if r != n1 {
+                if r != n {
                     // Error from writei.
                     break;
                 } else {
                     i += r;
                 }
             }
-            if i == n {
-                n
+            if i == num_bytes {
+                num_bytes as i32
             } else {
                 -1
             }

@@ -7,6 +7,8 @@ pub enum QueueError {
     NoSpace,
 }
 
+pub type Result<T> = core::result::Result<T, QueueError>;
+
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Queue<T> {
     inner: [Option<T>; QUEUE_SIZE],
@@ -52,7 +54,7 @@ impl<T> Queue<T> {
         item
     }
     /// Adds an item to the front of the queue.
-    pub fn push_front(&mut self, value: T) -> Result<(), QueueError> {
+    pub fn push_front(&mut self, value: T) -> Result<()> {
         if self.space_remaining() == 0 {
             return Err(QueueError::NoSpace);
         }
@@ -75,7 +77,7 @@ impl<T> Queue<T> {
         item
     }
     /// Adds an item to the end of the queue.
-    pub fn push_back(&mut self, value: T) -> Result<(), QueueError> {
+    pub fn push_back(&mut self, value: T) -> Result<()> {
         if self.space_remaining() == 0 {
             return Err(QueueError::NoSpace);
         }
