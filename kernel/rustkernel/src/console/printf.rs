@@ -34,16 +34,6 @@ pub extern "C" fn printint(n: i32) {
 }
 
 #[no_mangle]
-pub extern "C" fn printhex(n: i32) {
-    print!("{:0x}", n);
-}
-
-#[no_mangle]
-pub extern "C" fn printptr(p: u64) {
-    print!("{:#018x}", p);
-}
-
-#[no_mangle]
 pub unsafe extern "C" fn printstr(s: *const c_char) {
     let s = CStr::from_ptr(s).to_str().unwrap_or_default();
     print!("{}", s);

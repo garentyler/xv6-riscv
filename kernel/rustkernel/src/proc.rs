@@ -1,8 +1,8 @@
 #![allow(clippy::comparison_chain)]
 
 use crate::{
+    arch::riscv::{intr_get, r_tp, Pagetable, PTE_W},
     mem::kalloc::kfree,
-    arch::riscv::{Pagetable, PTE_W, intr_get, r_tp},
     sync::spinlock::{Spinlock, SpinlockGuard},
 };
 use core::{
@@ -224,8 +224,7 @@ pub struct Proc {
 /// Must be called with interrupts disabled
 /// to prevent race with process being moved
 /// to a different CPU.
-#[no_mangle]
-pub unsafe extern "C" fn cpuid() -> i32 {
+pub unsafe fn cpuid() -> i32 {
     r_tp() as i32
 }
 
@@ -289,8 +288,7 @@ pub unsafe extern "C" fn reparent(p: *mut Proc) {
 
 /// Grow or shrink user memory by n bytes.
 /// Return 0 on success, -1 on failure.
-#[no_mangle]
-pub unsafe extern "C" fn growproc(n: i32) -> i32 {
+pub unsafe fn growproc(n: i32) -> i32 {
     let p = myproc();
     let mut sz = (*p).sz;
 
@@ -307,8 +305,7 @@ pub unsafe extern "C" fn growproc(n: i32) -> i32 {
 }
 
 /// Give up the CPU for one scheduling round.
-#[no_mangle]
-pub unsafe extern "C" fn r#yield() {
+pub unsafe fn r#yield() {
     let p = myproc();
     let _guard = (*p).lock.lock();
     (*p).state = ProcState::Runnable;

@@ -42,13 +42,6 @@ impl Default for Pipe {
     }
 }
 
-extern "C" {
-    // pub fn pipealloc(a: *mut *mut File, b: *mut *mut File) -> i32;
-    // pub fn pipeclose(pipe: *mut Pipe, writable: i32);
-    // pub fn pipewrite(pipe: *mut Pipe, addr: u64, n: i32) -> i32;
-    // pub fn piperead(pipe: *mut Pipe, addr: u64, n: i32) -> i32;
-}
-
 #[no_mangle]
 pub unsafe extern "C" fn pipealloc(a: *mut *mut File, b: *mut *mut File) -> i32 {
     *a = filealloc();
@@ -81,8 +74,7 @@ pub unsafe extern "C" fn pipealloc(a: *mut *mut File, b: *mut *mut File) -> i32 
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn pipeclose(pipe: *mut Pipe, writable: i32) {
+pub unsafe fn pipeclose(pipe: *mut Pipe, writable: i32) {
     let _guard = (*pipe).lock.lock();
 
     if writable > 0 {
@@ -98,8 +90,7 @@ pub unsafe extern "C" fn pipeclose(pipe: *mut Pipe, writable: i32) {
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn pipewrite(pipe: *mut Pipe, addr: u64, n: i32) -> i32 {
+pub unsafe fn pipewrite(pipe: *mut Pipe, addr: u64, n: i32) -> i32 {
     let mut i = 0;
     let p = myproc();
     let lock = (*pipe).lock.lock();
@@ -126,9 +117,8 @@ pub unsafe extern "C" fn pipewrite(pipe: *mut Pipe, addr: u64, n: i32) -> i32 {
     i
 }
 
-#[no_mangle]
 #[allow(clippy::while_immutable_condition)]
-pub unsafe extern "C" fn piperead(pipe: *mut Pipe, addr: u64, n: i32) -> i32 {
+pub unsafe fn piperead(pipe: *mut Pipe, addr: u64, n: i32) -> i32 {
     let mut i = 0;
     let p = myproc();
     let lock = (*pipe).lock.lock();

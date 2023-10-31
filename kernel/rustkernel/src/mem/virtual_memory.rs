@@ -1,13 +1,13 @@
 use crate::{
+    arch::riscv::{
+        memlayout::{KERNBASE, PHYSTOP, TRAMPOLINE},
+        *,
+    },
     mem::{
         kalloc::{kalloc, kfree},
         memmove, memset,
     },
     proc::proc_mapstacks,
-    arch::riscv::{
-        memlayout::{KERNBASE, PHYSTOP, TRAMPOLINE},
-        *,
-    },
 };
 use core::ptr::{addr_of, addr_of_mut, null_mut};
 
@@ -104,12 +104,7 @@ pub unsafe fn kvminithart() {
 /// - 21..30: 9 bits of level 0 index.
 /// - 30..39: 9 bits of level 0 index.
 /// - 39..64: Must be zero.
-#[no_mangle]
-pub unsafe extern "C" fn walk(
-    mut pagetable: Pagetable,
-    virtual_addr: u64,
-    alloc: i32,
-) -> *mut PagetableEntry {
+pub unsafe fn walk(mut pagetable: Pagetable, virtual_addr: u64, alloc: i32) -> *mut PagetableEntry {
     if virtual_addr > MAXVA {
         panic!("walk");
     }
@@ -509,8 +504,7 @@ pub unsafe extern "C" fn copyin(
 /// Copy bytes to `dst` from virtual address `src_virtual_addr`
 /// in a given pagetable, until b'\0' or `max` is reached.
 /// Returns 0 on success, -1 on error.
-#[no_mangle]
-pub unsafe extern "C" fn copyinstr(
+pub unsafe fn copyinstr(
     pagetable: Pagetable,
     mut dst: *mut u8,
     mut src_virtual_addr: u64,

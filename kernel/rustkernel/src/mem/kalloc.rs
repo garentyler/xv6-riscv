@@ -3,8 +3,8 @@
 //! and pipe buffers. Allocates whole 4096-byte pages.
 
 use crate::{
-    mem::memset,
     arch::riscv::{memlayout::PHYSTOP, pg_round_up, PGSIZE},
+    mem::memset,
     sync::spinlock::Spinlock,
 };
 use core::ptr::{addr_of_mut, null_mut};
@@ -32,14 +32,12 @@ pub struct KernelMemory {
     pub freelist: *mut Run,
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn kinit() {
+pub unsafe fn kinit() {
     kmem.lock = Spinlock::new();
     freerange(addr_of_mut!(end).cast(), PHYSTOP as *mut u8)
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn freerange(pa_start: *mut u8, pa_end: *mut u8) {
+unsafe fn freerange(pa_start: *mut u8, pa_end: *mut u8) {
     let mut p = pg_round_up(pa_start as usize as u64) as *mut u8;
 
     while p.add(PGSIZE as usize) <= pa_end {

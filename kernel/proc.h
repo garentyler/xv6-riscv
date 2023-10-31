@@ -111,5 +111,4 @@ struct proc {
   char name[16];               // Process name (debugging)
 };
 
-int cpuid();
 int allocpid();

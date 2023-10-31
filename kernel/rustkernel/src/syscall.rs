@@ -1,8 +1,8 @@
 use crate::{
+    arch::riscv::memlayout::QEMU_POWER,
     mem::virtual_memory::{copyin, copyinstr},
     println,
     proc::{self, myproc},
-    arch::riscv::memlayout::QEMU_POWER,
     string::strlen,
     trap::CLOCK_TICKS,
 };
@@ -254,8 +254,7 @@ pub unsafe extern "C" fn argstr(n: i32, buf: *mut u8, max: i32) -> i32 {
     fetchstr(addr, buf, max)
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn syscall() {
+pub unsafe fn syscall() {
     let p = myproc();
     let num = (*(*p).trapframe).a7;
 

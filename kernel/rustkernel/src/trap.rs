@@ -1,7 +1,7 @@
 use crate::{
+    arch::riscv::*,
     println,
     proc::{cpuid, exit, killed, mycpu, myproc, r#yield, setkilled, wakeup, ProcState},
-    arch::riscv::*,
     sync::mutex::Mutex,
     syscall::syscall,
 };
@@ -22,13 +22,11 @@ extern "C" {
 pub static CLOCK_TICKS: Mutex<usize> = Mutex::new(0);
 
 /// Set up to take exceptions and traps while in the kernel.
-#[no_mangle]
-pub unsafe extern "C" fn trapinithart() {
+pub unsafe fn trapinithart() {
     w_stvec(kernelvec as usize as u64);
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn clockintr() {
+pub fn clockintr() {
     let mut ticks = CLOCK_TICKS.lock_spinning();
 
     *ticks += 1;
@@ -40,8 +38,7 @@ pub unsafe extern "C" fn clockintr() {
 /// Check if it's an external interrupt or software interrupt and handle it.
 ///
 /// Returns 2 if timer interrupt, 1 if other device, 0 if not recognized.
-#[no_mangle]
-pub unsafe extern "C" fn devintr() -> i32 {
+pub unsafe fn devintr() -> i32 {
     let scause = r_scause();
 
     if (scause & 0x8000000000000000 > 0) && (scause & 0xff) == 9 {
@@ -270,8 +267,7 @@ pub unsafe extern "C" fn usertrap() {
 // it takes two pop_intr_off()s to undo two push_intr_off()s.  Also, if interrupts
 // are initially off, then push_intr_off, pop_intr_off leaves them off.
 
-#[no_mangle]
-pub unsafe extern "C" fn push_intr_off() {
+pub unsafe fn push_intr_off() {
     let old = intr_get();
     let cpu = mycpu();
 
@@ -281,8 +277,7 @@ pub unsafe extern "C" fn push_intr_off() {
     }
     (*cpu).interrupt_disable_layers += 1;
 }
-#[no_mangle]
-pub unsafe extern "C" fn pop_intr_off() {
+pub unsafe fn pop_intr_off() {
     let cpu = mycpu();
 
     if intr_get() == 1 {

@@ -8,18 +8,18 @@
 extern crate alloc;
 extern crate core;
 
-pub mod console;
-pub mod fs;
-pub mod io;
-pub mod mem;
-pub mod proc;
-pub mod queue;
-pub(crate) mod arch;
-pub mod start;
-pub mod string;
-pub mod sync;
-pub mod syscall;
-pub mod trap;
+mod arch;
+mod console;
+mod fs;
+mod io;
+mod mem;
+mod proc;
+mod queue;
+mod start;
+mod string;
+mod sync;
+mod syscall;
+mod trap;
 
 use crate::{proc::cpuid, sync::mutex::Mutex};
 use core::ffi::{c_char, CStr};
@@ -56,8 +56,7 @@ pub const FSSIZE: usize = 2000;
 /// Maximum file path size
 pub const MAXPATH: usize = 128;
 
-#[no_mangle]
-pub unsafe extern "C" fn main() -> ! {
+pub unsafe fn main() -> ! {
     if cpuid() == 0 {
         console::consoleinit();
         mem::kalloc::kinit();

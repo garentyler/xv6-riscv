@@ -187,10 +187,6 @@ userinit(void)
   release(&p->lock);
 }
 
-// Grow or shrink user memory by n bytes.
-// Return 0 on success, -1 on failure.
-int growproc(int n);
-
 // Create a new process, copying the parent.
 // Sets up child kernel stack to return as if from fork() system call.
 int
@@ -385,9 +381,6 @@ scheduler(void)
 // break in the few places where a lock is held but
 // there's no process.
 void sched(void);
-
-// Give up the CPU for one scheduling round.
-void yield(void);
 
 // A fork child's very first scheduling by scheduler()
 // will swtch to forkret.

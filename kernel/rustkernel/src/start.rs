@@ -1,4 +1,4 @@
-use crate::{main, arch::riscv::*, NCPU};
+use crate::{arch::riscv::*, main, NCPU};
 use core::{arch::asm, ptr::addr_of};
 
 extern "C" {
@@ -53,8 +53,7 @@ pub unsafe extern "C" fn start() {
 /// at timervec in kernelvec.S,
 /// which turns them into software interrupts for
 /// devintr() in trap.c.
-#[no_mangle]
-pub unsafe extern "C" fn timerinit() {
+pub unsafe fn timerinit() {
     // Each CPU has a separate source of timer interrupts.
     let id = r_mhartid();
 
