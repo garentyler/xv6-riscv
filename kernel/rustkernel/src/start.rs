@@ -40,7 +40,7 @@ pub unsafe extern "C" fn start() {
     // Ask for clock interrupts.
     timerinit();
 
-    // Keep each CPU's hartid in its tp register, for cpuid().
+    // Keep each CPU's hartid in its tp register, for Cpu::current_id().
     w_tp(r_mhartid());
 
     // Switch to supervisor mode and jump to main().

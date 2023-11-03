@@ -2,7 +2,7 @@
 
 use crate::{
     arch::riscv::{plic_sclaim, plic_senable, plic_spriority, PLIC, UART0_IRQ, VIRTIO0_IRQ},
-    proc::cpu::cpuid,
+    proc::cpu::Cpu,
 };
 
 pub unsafe fn plicinit() {
@@ -12,7 +12,7 @@ pub unsafe fn plicinit() {
 }
 
 pub unsafe fn plicinithart() {
-    let hart = cpuid() as u64;
+    let hart = Cpu::current_id() as u64;
 
     // Set enable bits for this hart's S-mode
     // for the UART and VIRTIO disk.
@@ -24,12 +24,12 @@ pub unsafe fn plicinithart() {
 
 /// Ask the PLIC what interrupt we should serve.
 pub unsafe fn plic_claim() -> i32 {
-    let hart = cpuid() as u64;
+    let hart = Cpu::current_id() as u64;
     *(plic_sclaim(hart) as *const i32)
 }
 
 /// Tell the PLIC we've served this IRQ.
 pub unsafe fn plic_complete(irq: i32) {
-    let hart = cpuid() as u64;
+    let hart = Cpu::current_id() as u64;
     *(plic_sclaim(hart) as *mut i32) = irq;
 }

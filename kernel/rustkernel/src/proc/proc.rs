@@ -1,6 +1,6 @@
 #![allow(clippy::comparison_chain)]
 
-use super::{context::Context, cpu::mycpu, trapframe::Trapframe};
+use super::{context::Context, cpu::Cpu, trapframe::Trapframe};
 use crate::{
     arch::riscv::{intr_get, Pagetable, PTE_W},
     fs::file::{File, Inode},
@@ -101,7 +101,7 @@ pub struct Proc {
 #[no_mangle]
 pub unsafe extern "C" fn myproc() -> *mut Proc {
     let _ = crate::trap::InterruptBlocker::new();
-    let c = mycpu();
+    let c = Cpu::current_raw();
     (*c).proc
 }
 
@@ -183,7 +183,7 @@ pub unsafe fn r#yield() {
 #[no_mangle]
 pub unsafe extern "C" fn sched() {
     let p = myproc();
-    let c = mycpu();
+    let c = Cpu::current_raw();
 
     if (*c).interrupt_disable_layers != 1 {
         panic!("sched locks");

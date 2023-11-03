@@ -21,7 +21,7 @@ mod sync;
 mod syscall;
 mod trap;
 
-use crate::{proc::cpu::cpuid, sync::mutex::Mutex};
+use crate::{proc::cpu::Cpu, sync::mutex::Mutex};
 use core::ffi::{c_char, CStr};
 
 pub(crate) use crate::console::printf::{print, println};
@@ -57,7 +57,7 @@ pub const FSSIZE: usize = 2000;
 pub const MAXPATH: usize = 128;
 
 pub unsafe fn main() -> ! {
-    if cpuid() == 0 {
+    if Cpu::current_id() == 0 {
         console::consoleinit();
         mem::kalloc::kinit();
         println!("\nxv6 kernel is booting");

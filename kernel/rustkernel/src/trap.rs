@@ -2,7 +2,7 @@ use crate::{
     arch::riscv::*,
     println,
     proc::{
-        cpu::{cpuid, mycpu},
+        cpu::Cpu,
         proc::{exit, killed, myproc, r#yield, setkilled, wakeup, ProcState},
     },
     sync::mutex::Mutex,
@@ -70,7 +70,7 @@ pub unsafe fn devintr() -> i32 {
         // Software interrupt from a machine-mode timer interrupt,
         // forwarded by timervec in kernelvec.S.
 
-        if cpuid() == 0 {
+        if Cpu::current_id() == 0 {
             clockintr();
         }
 
@@ -90,7 +90,7 @@ impl InterruptBlocker {
     pub fn new() -> InterruptBlocker {
         unsafe {
             let interrupts_before = intr_get();
-            let cpu = mycpu();
+            let cpu = Cpu::current_raw();
 
             intr_off();
 
@@ -106,7 +106,7 @@ impl InterruptBlocker {
 impl core::ops::Drop for InterruptBlocker {
     fn drop(&mut self) {
         unsafe {
-            let cpu = mycpu();
+            let cpu = Cpu::current_raw();
 
             if intr_get() == 1 || (*cpu).interrupt_disable_layers < 1 {
                 // panic!("pop_off mismatched");
@@ -146,7 +146,7 @@ pub unsafe extern "C" fn usertrapret() {
     // process's kernel stack
     (*(*p).trapframe).kernel_sp = (*p).kstack + PGSIZE;
     (*(*p).trapframe).kernel_trap = usertrap as usize as u64;
-    // hartid for cpuid()
+    // hartid for Cpu::current_id()
     (*(*p).trapframe).kernel_hartid = r_tp();
 
     // Set up the registers that trampoline.S's
@@ -272,7 +272,7 @@ pub unsafe extern "C" fn usertrap() {
 
 pub unsafe fn push_intr_off() {
     let old = intr_get();
-    let cpu = mycpu();
+    let cpu = Cpu::current_raw();
 
     intr_off();
     if (*cpu).interrupt_disable_layers == 0 {
@@ -281,7 +281,7 @@ pub unsafe fn push_intr_off() {
     (*cpu).interrupt_disable_layers += 1;
 }
 pub unsafe fn pop_intr_off() {
-    let cpu = mycpu();
+    let cpu = Cpu::current_raw();
 
     if intr_get() == 1 {
         // crate::panic_byte(b'0');

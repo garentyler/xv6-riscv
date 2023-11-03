@@ -31,8 +31,6 @@ struct cpu {
   int previous_interrupts_enabled; // Were interrupts enabled before push_off()?
 };
 
-extern struct cpu cpus[NCPU];
-
 // per-process data for the trap handling code in trampoline.S.
 // sits in a page by itself just under the trampoline page in the
 // user page table. not specially mapped in the kernel page table.

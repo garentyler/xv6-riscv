@@ -2,9 +2,7 @@ use super::{context::Context, proc::Proc};
 use crate::arch::riscv::asm::r_tp;
 use core::ptr::{addr_of_mut, null_mut};
 
-extern "C" {
-    pub static mut cpus: [Cpu; crate::NCPU];
-}
+pub static mut CPUS: [Cpu; crate::NCPU] = [Cpu::new(); crate::NCPU];
 
 /// Per-CPU state.
 #[repr(C)]
@@ -27,19 +25,27 @@ impl Cpu {
             previous_interrupts_enabled: 0,
         }
     }
-}
-
-/// Must be called with interrupts disabled
-/// to prevent race with process being moved
-/// to a different CPU.
-pub unsafe fn cpuid() -> i32 {
-    r_tp() as i32
+    /// Must be called with interrupts disabled
+    /// to prevent race with process being moved
+    /// to a different CPU.
+    pub fn current_id() -> usize {
+        unsafe { r_tp() as usize }
+    }
+    /// Return this CPU's cpu struct.
+    /// Interrupts must be disabled.
+    pub fn current() -> &'static mut Cpu {
+        unsafe { &mut *Cpu::current_raw() }
+    }
+    /// Return this CPU's cpu struct.
+    /// Interrupts must be disabled.
+    pub unsafe fn current_raw() -> *mut Cpu {
+        addr_of_mut!(CPUS[Cpu::current_id()])
+    }
 }
 
 /// Return this CPU's cpu struct.
 /// Interrupts must be disabled.
 #[no_mangle]
 pub unsafe extern "C" fn mycpu() -> *mut Cpu {
-    let id = cpuid();
-    addr_of_mut!(cpus[id as usize])
+    Cpu::current_raw()
 }
