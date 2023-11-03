@@ -1,5 +1,5 @@
 use super::LockStrategy;
-use crate::proc::{myproc, sched, sleep, wakeup, ProcState};
+use crate::proc::proc::{myproc, sched, sleep, wakeup, ProcState};
 use core::{
     cell::UnsafeCell,
     ops::Drop,

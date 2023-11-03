@@ -13,7 +13,7 @@ pub mod uart;
 
 use crate::{
     fs::file::{devsw, CONSOLE},
-    proc::{killed, myproc, procdump, wakeup},
+    proc::proc::{killed, myproc, procdump, wakeup},
     sync::mutex::Mutex,
 };
 use core::{ffi::c_void, ptr::addr_of_mut};

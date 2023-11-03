@@ -1,7 +1,8 @@
 #![allow(clippy::comparison_chain)]
 
+use super::{context::Context, cpu::mycpu, trapframe::Trapframe};
 use crate::{
-    arch::riscv::{intr_get, r_tp, Pagetable, PTE_W},
+    arch::riscv::{intr_get, Pagetable, PTE_W},
     fs::file::{File, Inode},
     mem::kalloc::kfree,
     sync::spinlock::{Spinlock, SpinlockGuard},
@@ -12,7 +13,6 @@ use core::{
 };
 
 extern "C" {
-    pub static mut cpus: [Cpu; crate::NCPU];
     pub static mut proc: [Proc; crate::NPROC];
     pub static mut initproc: *mut Proc;
     pub static mut nextpid: i32;
@@ -43,131 +43,6 @@ extern "C" {
     // pub fn sched();
     pub fn scheduler() -> !;
     pub fn swtch(a: *mut Context, b: *mut Context);
-}
-
-/// Saved registers for kernel context switches.
-#[repr(C)]
-#[derive(Copy, Clone, Default)]
-pub struct Context {
-    pub ra: u64,
-    pub sp: u64,
-
-    // callee-saved
-    pub s0: u64,
-    pub s1: u64,
-    pub s2: u64,
-    pub s3: u64,
-    pub s4: u64,
-    pub s5: u64,
-    pub s6: u64,
-    pub s7: u64,
-    pub s8: u64,
-    pub s9: u64,
-    pub s10: u64,
-    pub s11: u64,
-}
-impl Context {
-    pub const fn new() -> Context {
-        Context {
-            ra: 0u64,
-            sp: 0u64,
-            s0: 0u64,
-            s1: 0u64,
-            s2: 0u64,
-            s3: 0u64,
-            s4: 0u64,
-            s5: 0u64,
-            s6: 0u64,
-            s7: 0u64,
-            s8: 0u64,
-            s9: 0u64,
-            s10: 0u64,
-            s11: 0u64,
-        }
-    }
-}
-
-/// Per-CPU state.
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct Cpu {
-    pub proc: *mut Proc,
-    /// swtch() here to enter scheduler()
-    pub context: Context,
-    /// Depth of push_off() nesting.
-    pub interrupt_disable_layers: i32,
-    /// Were interrupts enabled before push_off()?
-    pub previous_interrupts_enabled: i32,
-}
-impl Cpu {
-    pub const fn new() -> Cpu {
-        Cpu {
-            proc: null_mut(),
-            // proc: None,
-            context: Context::new(),
-            interrupt_disable_layers: 0,
-            previous_interrupts_enabled: 0,
-        }
-    }
-}
-
-/// Per-process data for the trap handling code in trampoline.S.
-///
-/// sits in a page by itself just under the trampoline page in the
-/// user page table. not specially mapped in the kernel page table.
-/// uservec in trampoline.S saves user registers in the trapframe,
-/// then initializes registers from the trapframe's
-/// kernel_sp, kernel_hartid, kernel_satp, and jumps to kernel_trap.
-/// usertrapret() and userret in trampoline.S set up
-/// the trapframe's kernel_*, restore user registers from the
-/// trapframe, switch to the user page table, and enter user space.
-/// the trapframe includes callee-saved user registers like s0-s11 because the
-/// return-to-user path via usertrapret() doesn't return through
-/// the entire kernel call stack.
-#[repr(C)]
-#[derive(Default)]
-pub struct TrapFrame {
-    /// Kernel page table.
-    pub kernel_satp: u64,
-    /// Top of process's kernel stack.
-    pub kernel_sp: u64,
-    /// usertrap()
-    pub kernel_trap: u64,
-    /// Saved user program counter.
-    pub epc: u64,
-    /// Saved kernel tp.
-    pub kernel_hartid: u64,
-    pub ra: u64,
-    pub sp: u64,
-    pub gp: u64,
-    pub tp: u64,
-    pub t0: u64,
-    pub t1: u64,
-    pub t2: u64,
-    pub s0: u64,
-    pub s1: u64,
-    pub a0: u64,
-    pub a1: u64,
-    pub a2: u64,
-    pub a3: u64,
-    pub a4: u64,
-    pub a5: u64,
-    pub a6: u64,
-    pub a7: u64,
-    pub s2: u64,
-    pub s3: u64,
-    pub s4: u64,
-    pub s5: u64,
-    pub s6: u64,
-    pub s7: u64,
-    pub s8: u64,
-    pub s9: u64,
-    pub s10: u64,
-    pub s11: u64,
-    pub t3: u64,
-    pub t4: u64,
-    pub t5: u64,
-    pub t6: u64,
 }
 
 #[repr(C)]
@@ -211,7 +86,7 @@ pub struct Proc {
     /// User page table
     pub pagetable: Pagetable,
     /// Data page for trampoline.S
-    pub trapframe: *mut TrapFrame,
+    pub trapframe: *mut Trapframe,
     /// swtch() here to run process
     pub context: Context,
     /// Open files
@@ -220,21 +95,6 @@ pub struct Proc {
     pub cwd: *mut Inode,
     /// Process name (debugging)
     pub name: [c_char; 16],
-}
-
-/// Must be called with interrupts disabled
-/// to prevent race with process being moved
-/// to a different CPU.
-pub unsafe fn cpuid() -> i32 {
-    r_tp() as i32
-}
-
-/// Return this CPU's cpu struct.
-/// Interrupts must be disabled.
-#[no_mangle]
-pub unsafe extern "C" fn mycpu() -> *mut Cpu {
-    let id = cpuid();
-    addr_of_mut!(cpus[id as usize])
 }
 
 /// Return the current struct proc *, or zero if none.

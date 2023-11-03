@@ -1,7 +1,10 @@
 use crate::{
     arch::riscv::*,
     println,
-    proc::{cpuid, exit, killed, mycpu, myproc, r#yield, setkilled, wakeup, ProcState},
+    proc::{
+        cpu::{cpuid, mycpu},
+        proc::{exit, killed, myproc, r#yield, setkilled, wakeup, ProcState},
+    },
     sync::mutex::Mutex,
     syscall::syscall,
 };

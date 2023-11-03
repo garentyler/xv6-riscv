@@ -2,7 +2,7 @@
 
 use crate::{
     arch::riscv::{plic_sclaim, plic_senable, plic_spriority, PLIC, UART0_IRQ, VIRTIO0_IRQ},
-    proc::cpuid,
+    proc::cpu::cpuid,
 };
 
 pub unsafe fn plicinit() {

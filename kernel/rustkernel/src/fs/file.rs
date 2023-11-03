@@ -4,7 +4,7 @@ use crate::{
     fs::{log, stat::Stat},
     io::pipe::Pipe,
     mem::virtual_memory::copyout,
-    proc::myproc,
+    proc::proc::myproc,
     sync::{sleeplock::Sleeplock, spinlock::Spinlock},
 };
 use core::ptr::{addr_of_mut, null_mut};

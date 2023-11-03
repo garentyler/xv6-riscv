@@ -8,7 +8,7 @@ use crate::{
     },
     mem::virtual_memory::{copyin, copyinstr},
     println,
-    proc::{self, myproc},
+    proc::proc::{self, myproc},
     string::strlen,
     trap::CLOCK_TICKS,
     NOFILE,

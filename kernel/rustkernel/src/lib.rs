@@ -21,7 +21,7 @@ mod sync;
 mod syscall;
 mod trap;
 
-use crate::{proc::cpuid, sync::mutex::Mutex};
+use crate::{proc::cpu::cpuid, sync::mutex::Mutex};
 use core::ffi::{c_char, CStr};
 
 pub(crate) use crate::console::printf::{print, println};
@@ -63,7 +63,7 @@ pub unsafe fn main() -> ! {
         println!("\nxv6 kernel is booting");
         mem::virtual_memory::kvminit();
         mem::virtual_memory::kvminithart();
-        proc::procinit();
+        proc::proc::procinit();
         trap::trapinithart();
         arch::riscv::plic::plicinit();
         arch::riscv::plic::plicinithart();
@@ -71,7 +71,7 @@ pub unsafe fn main() -> ! {
         fs::iinit();
         fs::file::fileinit();
         fs::virtio_disk::virtio_disk_init();
-        proc::userinit();
+        proc::proc::userinit();
         STARTED = true;
     } else {
         while !STARTED {
@@ -82,7 +82,7 @@ pub unsafe fn main() -> ! {
         arch::riscv::plic::plicinithart();
     }
 
-    proc::scheduler();
+    proc::proc::scheduler();
 }
 
 #[panic_handler]

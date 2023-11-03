@@ -1,5 +1,5 @@
 use crate::{
-    proc::{myproc, sched, ProcState},
+    proc::proc::{myproc, sched, ProcState},
     trap::{pop_intr_off, push_intr_off},
 };
 use core::{
