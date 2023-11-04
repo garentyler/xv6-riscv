@@ -2,9 +2,9 @@
 
 use super::{context::Context, cpu::Cpu, scheduler::wakeup, trapframe::Trapframe};
 use crate::{
-    arch::riscv::{Pagetable, PTE_W},
+    arch::riscv::{Pagetable, PTE_W, PGSIZE},
     fs::file::{File, Inode},
-    mem::kalloc::kfree,
+    mem::{kalloc::{kfree, kalloc}, memset},
     sync::spinlock::Spinlock,
 };
 use core::{
@@ -36,7 +36,7 @@ extern "C" {
     pub fn proc_mapstacks(kpgtbl: Pagetable);
     pub fn proc_pagetable(p: *mut Process) -> Pagetable;
     pub fn proc_freepagetable(pagetable: Pagetable, sz: u64);
-    pub fn allocproc() -> *mut Process;
+    // pub fn allocproc() -> *mut Process;
     pub fn uvmalloc(pagetable: Pagetable, oldsz: u64, newsz: u64, xperm: i32) -> u64;
     pub fn uvmdealloc(pagetable: Pagetable, oldsz: u64, newsz: u64) -> u64;
 }
@@ -57,6 +57,7 @@ pub enum ProcessState {
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum ProcessError {
+    MaxProcesses,
     Allocation,
 }
 
@@ -131,6 +132,53 @@ impl Process {
 
     pub fn alloc_pid() -> i32 {
         NEXT_PID.fetch_add(1, Ordering::SeqCst)
+    }
+    /// Look in the process table for an UNUSED proc.
+    /// If found, initialize state required to run in the kernel,
+    /// and return with p.lock held.
+    /// If there are no free procs, or a memory allocation fails, return an error.
+    pub unsafe fn alloc() -> Result<&'static mut Process, ProcessError> {
+        let mut index: Option<usize> = None;
+        for (i, p) in &mut proc.iter_mut().enumerate() {
+            p.lock.lock_unguarded();
+            if p.state == ProcessState::Unused {
+                index = Some(i);
+                break;
+            } else {
+                p.lock.unlock();
+            }
+        }
+        let Some(index) = index else {
+            return Err(ProcessError::MaxProcesses);
+        };
+
+        let p: &mut Process = &mut proc[index];
+        p.pid = Process::alloc_pid();
+        p.state = ProcessState::Used;
+
+        // Allocate a trapframe page.
+        p.trapframe = kalloc() as *mut Trapframe;
+        if p.trapframe.is_null() {
+            p.free();
+            p.lock.unlock();
+            return Err(ProcessError::Allocation);
+        }
+
+        // An empty user page table.
+        p.pagetable = proc_pagetable(addr_of_mut!(*p));
+        if p.pagetable.is_null() {
+            p.free();
+            p.lock.unlock();
+            return Err(ProcessError::Allocation);
+        }
+
+        // Set up new context to start executing at forkret,
+        // which returns to userspace.
+        memset(addr_of_mut!(p.context).cast(), 0, core::mem::size_of::<Context>() as u32);
+        p.context.ra = forkret as usize as u64;
+        p.context.sp = p.kstack + PGSIZE;
+
+        Ok(p)
     }
 
     /// Free a proc structure and the data hanging from it, including user pages.
@@ -221,6 +269,15 @@ pub extern "C" fn myproc() -> *mut Process {
 #[no_mangle]
 pub extern "C" fn allocpid() -> i32 {
     Process::alloc_pid()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn allocproc() -> *mut Process {
+    if let Ok(process) = Process::alloc() {
+        process as *mut Process
+    } else {
+        null_mut()
+    }
 }
 
 /// Free a proc structure and the data hanging from it, including user pages.
