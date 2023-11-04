@@ -3,12 +3,12 @@ use crate::{
     println,
     proc::{
         cpu::Cpu,
-        proc::{exit, killed, myproc, r#yield, setkilled, wakeup, ProcState},
+        proc::{exit, killed, r#yield, setkilled, wakeup, Proc, ProcState},
     },
     sync::mutex::Mutex,
     syscall::syscall,
 };
-use core::ptr::addr_of;
+use core::ptr::{addr_of, addr_of_mut};
 
 extern "C" {
     pub fn kernelvec();
@@ -127,7 +127,7 @@ impl !Send for InterruptBlocker {}
 /// Return to user space
 #[no_mangle]
 pub unsafe extern "C" fn usertrapret() {
-    let p = myproc();
+    let proc = Proc::current().unwrap();
 
     // We're about to switch the destination of traps from
     // kerneltrap() to usertrap(), so turn off interrupts until
@@ -142,12 +142,12 @@ pub unsafe extern "C" fn usertrapret() {
     // Set up trapframe values that uservec will need when
     // the process next traps into the kernel.
     // kernel page table
-    (*(*p).trapframe).kernel_satp = r_satp();
+    (*proc.trapframe).kernel_satp = r_satp();
     // process's kernel stack
-    (*(*p).trapframe).kernel_sp = (*p).kstack + PGSIZE;
-    (*(*p).trapframe).kernel_trap = usertrap as usize as u64;
+    (*proc.trapframe).kernel_sp = proc.kstack + PGSIZE;
+    (*proc.trapframe).kernel_trap = usertrap as usize as u64;
     // hartid for Cpu::current_id()
-    (*(*p).trapframe).kernel_hartid = r_tp();
+    (*proc.trapframe).kernel_hartid = r_tp();
 
     // Set up the registers that trampoline.S's
     // sret will use to get to user space.
@@ -161,10 +161,10 @@ pub unsafe extern "C" fn usertrapret() {
     w_sstatus(x);
 
     // Set S Exception Program Counter to the saved user pc.
-    w_sepc((*(*p).trapframe).epc);
+    w_sepc((*proc.trapframe).epc);
 
     // Tell trampoline.S the user page table to switch to.
-    let satp = make_satp((*p).pagetable);
+    let satp = make_satp(proc.pagetable);
 
     // Jump to userret in trampoline.S at the top of memory, which
     // switches to the user page table, restores user registers,
@@ -195,7 +195,10 @@ pub unsafe extern "C" fn kerneltrap() {
     if which_dev == 0 {
         println!("scause {}\nsepc={} stval={}", scause, r_sepc(), r_stval());
         panic!("kerneltrap");
-    } else if which_dev == 2 && !myproc().is_null() && (*myproc()).state == ProcState::Running {
+    } else if which_dev == 2
+        && Proc::current().is_some()
+        && Proc::current().unwrap().state == ProcState::Running
+    {
         // Give up the CPU if this is a timer interrupt.
         r#yield();
     }
@@ -219,21 +222,21 @@ pub unsafe extern "C" fn usertrap() {
     // since we're now in the kernel.
     w_stvec(kernelvec as usize as u64);
 
-    let p = myproc();
+    let proc = Proc::current().unwrap();
 
     // Save user program counter.
-    (*(*p).trapframe).epc = r_sepc();
+    (*proc.trapframe).epc = r_sepc();
 
     if r_scause() == 8 {
         // System call
 
-        if killed(p) > 0 {
+        if killed(addr_of_mut!(*proc)) > 0 {
             exit(-1);
         }
 
         // sepc points to the ecall instruction, but
         // we want to return to the next instruction.
-        (*(*p).trapframe).epc += 4;
+        (*proc.trapframe).epc += 4;
 
         // An interrupt will change sepc, scause, and sstatus,
         // so enable only now that we're done with those registers.
@@ -247,14 +250,14 @@ pub unsafe extern "C" fn usertrap() {
         println!(
             "usertrap(): unexpected scause {} {}\n\tsepc={} stval={}",
             r_scause(),
-            (*p).pid,
+            proc.pid,
             r_sepc(),
             r_stval()
         );
-        setkilled(p);
+        setkilled(addr_of_mut!(*proc));
     }
 
-    if killed(p) > 0 {
+    if killed(addr_of_mut!(*proc)) > 0 {
         exit(-1);
     }
 

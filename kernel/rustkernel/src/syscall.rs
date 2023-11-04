@@ -8,7 +8,7 @@ use crate::{
     },
     mem::virtual_memory::{copyin, copyinstr},
     println,
-    proc::proc::{self, myproc},
+    proc::proc::{self, Proc},
     string::strlen,
     trap::CLOCK_TICKS,
     NOFILE,
@@ -102,7 +102,7 @@ impl Syscall {
             }
             Syscall::Chdir => {
                 let mut path = [0u8; crate::MAXPATH];
-                let p = myproc();
+                let proc = Proc::current().unwrap();
 
                 let _operation = LogOperation::new();
 
@@ -120,8 +120,8 @@ impl Syscall {
                     return -1i64 as u64;
                 }
                 fs::iunlock(inode);
-                fs::iput((*p).cwd);
-                (*p).cwd = inode;
+                fs::iput(proc.cwd);
+                proc.cwd = inode;
                 0
             }
             Syscall::Dup => {
@@ -138,11 +138,11 @@ impl Syscall {
                 file::filedup(file);
                 file_descriptor as u64
             }
-            Syscall::Getpid => (*myproc()).pid as u64,
+            Syscall::Getpid => Proc::current().unwrap().pid as u64,
             Syscall::Sbrk => {
                 let mut n = 0i32;
                 argint(0, addr_of_mut!(n));
-                let addr = (*myproc()).sz;
+                let addr = Proc::current().unwrap().sz;
 
                 if proc::growproc(n) < 0 {
                     -1i64 as u64
@@ -157,7 +157,7 @@ impl Syscall {
                 let mut ticks = CLOCK_TICKS.lock_spinning();
 
                 while *ticks < *ticks + n as usize {
-                    if proc::killed(myproc()) > 0 {
+                    if proc::killed(addr_of!(*Proc::current().unwrap()).cast_mut()) > 0 {
                         return -1i64 as u64;
                     }
                     // Sleep until the value changes.
@@ -191,7 +191,7 @@ impl Syscall {
                 let mut file: *mut File = null_mut();
 
                 if argfd(0, addr_of_mut!(file_descriptor), addr_of_mut!(file)) >= 0 {
-                    (*myproc()).ofile[file_descriptor as usize] = null_mut();
+                    Proc::current().unwrap().ofile[file_descriptor as usize] = null_mut();
                     file::fileclose(file);
                     0
                 } else {
@@ -269,13 +269,13 @@ impl From<Syscall> for usize {
 /// Fetch the u64 at addr from the current process.
 #[no_mangle]
 pub unsafe extern "C" fn fetchaddr(addr: u64, ip: *mut u64) -> i32 {
-    let p = myproc();
+    let proc = Proc::current().unwrap();
 
     // Both tests needed, in case of overflow.
-    if addr >= (*p).sz
-        || addr + size_of::<u64>() as u64 > (*p).sz
+    if addr >= proc.sz
+        || addr + size_of::<u64>() as u64 > proc.sz
         || copyin(
-            (*p).pagetable,
+            proc.pagetable,
             ip.cast(),
             addr,
             size_of::<*mut u64>() as u64,
@@ -292,8 +292,9 @@ pub unsafe extern "C" fn fetchaddr(addr: u64, ip: *mut u64) -> i32 {
 /// Returns length of string, not including null, or -1 for error.
 #[no_mangle]
 pub unsafe extern "C" fn fetchstr(addr: u64, buf: *mut u8, max: i32) -> i32 {
-    let p = myproc();
-    if copyinstr((*p).pagetable, buf, addr, max as u64) < 0 {
+    let proc = Proc::current().unwrap();
+
+    if copyinstr(proc.pagetable, buf, addr, max as u64) < 0 {
         -1
     } else {
         strlen(buf.cast())
@@ -303,10 +304,11 @@ pub unsafe extern "C" fn fetchstr(addr: u64, buf: *mut u8, max: i32) -> i32 {
 /// Allocate a file descriptor for the given file.
 /// Takes over file reference from caller on success.
 unsafe fn fdalloc(file: *mut File) -> Result<usize, ()> {
-    let p = myproc();
+    let proc = Proc::current().unwrap();
+
     for file_descriptor in 0..crate::NOFILE {
-        if (*p).ofile[file_descriptor].is_null() {
-            (*p).ofile[file_descriptor] = file;
+        if proc.ofile[file_descriptor].is_null() {
+            proc.ofile[file_descriptor] = file;
             return Ok(file_descriptor);
         }
     }
@@ -314,14 +316,15 @@ unsafe fn fdalloc(file: *mut File) -> Result<usize, ()> {
 }
 
 unsafe fn argraw(argument_index: usize) -> u64 {
-    let p = myproc();
+    let proc = Proc::current().unwrap();
+
     match argument_index {
-        0 => (*(*p).trapframe).a0,
-        1 => (*(*p).trapframe).a1,
-        2 => (*(*p).trapframe).a2,
-        3 => (*(*p).trapframe).a3,
-        4 => (*(*p).trapframe).a4,
-        5 => (*(*p).trapframe).a5,
+        0 => (*proc.trapframe).a0,
+        1 => (*proc.trapframe).a1,
+        2 => (*proc.trapframe).a2,
+        3 => (*proc.trapframe).a3,
+        4 => (*proc.trapframe).a4,
+        5 => (*proc.trapframe).a5,
         _ => panic!("argraw"),
     }
 }
@@ -354,7 +357,7 @@ pub unsafe extern "C" fn argfd(
         return -1;
     }
 
-    let file: *mut File = (*myproc()).ofile[file_descriptor];
+    let file: *mut File = Proc::current().unwrap().ofile[file_descriptor];
     if file.is_null() {
         return -1;
     }
@@ -380,13 +383,14 @@ pub unsafe extern "C" fn argstr(n: i32, buf: *mut u8, max: i32) -> i32 {
 }
 
 pub unsafe fn syscall() {
-    let p = myproc();
-    let num = (*(*p).trapframe).a7;
+    let proc = Proc::current().unwrap();
 
-    (*(*p).trapframe).a0 = match TryInto::<Syscall>::try_into(num as usize) {
+    let num = (*proc.trapframe).a7;
+
+    (*proc.trapframe).a0 = match TryInto::<Syscall>::try_into(num as usize) {
         Ok(syscall) => syscall.call(),
         Err(_) => {
-            println!("{} unknown syscall {}", (*p).pid, num);
+            println!("{} unknown syscall {}", proc.pid, num);
             -1i64 as u64
         }
     };

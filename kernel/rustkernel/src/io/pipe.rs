@@ -4,7 +4,7 @@ use crate::{
         kalloc::{kalloc, kfree},
         virtual_memory::{copyin, copyout},
     },
-    proc::proc::{killed, myproc, wakeup},
+    proc::proc::{killed, wakeup, Proc},
     sync::spinlock::Spinlock,
 };
 use core::ptr::{addr_of, addr_of_mut};
@@ -88,11 +88,11 @@ impl Pipe {
     }
     pub unsafe fn write(&self, addr: u64, num_bytes: usize) -> Result<usize> {
         let mut i = 0;
-        let p = myproc();
+        let proc = Proc::current().unwrap();
         let guard = self.lock.lock();
 
         while i < num_bytes {
-            if self.is_read_open == 0 || killed(p) > 0 {
+            if self.is_read_open == 0 || killed(addr_of_mut!(*proc)) > 0 {
                 return Err(PipeError::ProcessKilled);
             }
             if self.bytes_written == self.bytes_read + PIPESIZE as u32 {
@@ -101,7 +101,7 @@ impl Pipe {
                 guard.sleep(addr_of!(self.bytes_written).cast_mut().cast());
             } else {
                 let mut b = 0u8;
-                if copyin((*p).pagetable, addr_of_mut!(b), addr + i as u64, 1) == -1 {
+                if copyin(proc.pagetable, addr_of_mut!(b), addr + i as u64, 1) == -1 {
                     break;
                 }
                 let index = self.bytes_written as usize % PIPESIZE;
@@ -116,12 +116,12 @@ impl Pipe {
     #[allow(clippy::while_immutable_condition)]
     pub unsafe fn read(&self, addr: u64, num_bytes: usize) -> Result<usize> {
         let mut i = 0;
-        let p = myproc();
+        let proc = Proc::current().unwrap();
         let guard = self.lock.lock();
 
         // DOC: pipe-empty
         while self.bytes_read == self.bytes_written && self.is_write_open > 0 {
-            if killed(p) > 0 {
+            if killed(addr_of_mut!(*proc)) > 0 {
                 return Err(PipeError::ProcessKilled);
             } else {
                 // DOC: piperead-sleep
@@ -136,7 +136,7 @@ impl Pipe {
             }
             let b = self.data[self.bytes_read as usize % PIPESIZE];
             self.as_mut().bytes_read += 1;
-            if copyout((*p).pagetable, addr + i as u64, addr_of!(b).cast_mut(), 1) == -1 {
+            if copyout(proc.pagetable, addr + i as u64, addr_of!(b).cast_mut(), 1) == -1 {
                 break;
             }
             i += 1;

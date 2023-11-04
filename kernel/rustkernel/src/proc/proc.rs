@@ -96,12 +96,45 @@ pub struct Proc {
     /// Process name (debugging)
     pub name: [c_char; 16],
 }
+impl Proc {
+    pub const fn new() -> Proc {
+        Proc {
+            lock: Spinlock::new(),
+            state: ProcState::Unused,
+            chan: null_mut(),
+            killed: 0,
+            xstate: 0,
+            pid: 0,
+            parent: null_mut(),
+            kstack: 0,
+            sz: 0,
+            pagetable: null_mut(),
+            trapframe: null_mut(),
+            context: Context::new(),
+            ofile: [null_mut(); crate::NOFILE],
+            cwd: null_mut(),
+            name: [0x00; 16],
+        }
+    }
+    pub fn current() -> Option<&'static mut Proc> {
+        let _ = crate::trap::InterruptBlocker::new();
+        let p = Cpu::current().proc;
+        if p.is_null() {
+            None
+        } else {
+            unsafe { Some(&mut *p) }
+        }
+    }
+}
 
 /// Return the current struct proc *, or zero if none.
 #[no_mangle]
 pub unsafe extern "C" fn myproc() -> *mut Proc {
-    let _ = crate::trap::InterruptBlocker::new();
-    Cpu::current().proc
+    if let Some(p) = Proc::current() {
+        p as *mut Proc
+    } else {
+        null_mut()
+    }
 }
 
 #[no_mangle]
@@ -149,26 +182,26 @@ pub unsafe extern "C" fn reparent(p: *mut Proc) {
 /// Grow or shrink user memory by n bytes.
 /// Return 0 on success, -1 on failure.
 pub unsafe fn growproc(n: i32) -> i32 {
-    let p = myproc();
-    let mut sz = (*p).sz;
+    let p = Proc::current().unwrap();
+    let mut sz = p.sz;
 
     if n > 0 {
-        sz = uvmalloc((*p).pagetable, sz, sz.wrapping_add(n as u64), PTE_W);
+        sz = uvmalloc(p.pagetable, sz, sz.wrapping_add(n as u64), PTE_W);
         if sz == 0 {
             return -1;
         }
     } else if n < 0 {
-        sz = uvmdealloc((*p).pagetable, sz, sz.wrapping_add(n as u64));
+        sz = uvmdealloc(p.pagetable, sz, sz.wrapping_add(n as u64));
     }
-    (*p).sz = sz;
+    p.sz = sz;
     0
 }
 
 /// Give up the CPU for one scheduling round.
 pub unsafe fn r#yield() {
-    let p = myproc();
-    let _guard = (*p).lock.lock();
-    (*p).state = ProcState::Runnable;
+    let p = Proc::current().unwrap();
+    let _guard = p.lock.lock();
+    p.state = ProcState::Runnable;
     sched();
 }
 
@@ -181,19 +214,19 @@ pub unsafe fn r#yield() {
 /// there's no process.
 #[no_mangle]
 pub unsafe extern "C" fn sched() {
-    let p = myproc();
+    let p = Proc::current().unwrap();
     let cpu = Cpu::current();
 
     if cpu.interrupt_disable_layers != 1 {
         panic!("sched locks");
-    } else if (*p).state == ProcState::Running {
+    } else if p.state == ProcState::Running {
         panic!("sched running");
     } else if intr_get() > 0 {
         panic!("sched interruptible");
     }
 
     let previous_interrupts_enabled = cpu.previous_interrupts_enabled;
-    swtch(addr_of_mut!((*p).context), addr_of_mut!(cpu.context));
+    swtch(addr_of_mut!(p.context), addr_of_mut!(cpu.context));
     cpu.previous_interrupts_enabled = previous_interrupts_enabled;
 }
 
@@ -209,17 +242,17 @@ pub unsafe extern "C" fn sleep_lock(chan: *mut c_void, lock: *mut Spinlock) {
 
 /// Sleep until `wakeup(chan)` is called somewhere else.
 pub unsafe fn sleep(chan: *mut c_void) {
-    let p = myproc();
-    let _guard = (*p).lock.lock();
+    let p = Proc::current().unwrap();
+    let _guard = p.lock.lock();
 
     // Go to sleep.
-    (*p).chan = chan;
-    (*p).state = ProcState::Sleeping;
+    p.chan = chan;
+    p.state = ProcState::Sleeping;
 
     sched();
 
     // Tidy up.
-    (*p).chan = null_mut();
+    p.chan = null_mut();
 }
 
 /// Kill the process with the given pid.
