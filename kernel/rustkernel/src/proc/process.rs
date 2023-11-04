@@ -1,22 +1,30 @@
 #![allow(clippy::comparison_chain)]
 
-use super::{context::Context, cpu::Cpu, scheduler::{wakeup, sched}, trapframe::Trapframe};
+use super::{
+    context::Context,
+    cpu::Cpu,
+    scheduler::{sched, wakeup},
+    trapframe::Trapframe,
+};
 use crate::{
-    arch::riscv::{Pagetable, PTE_W, PTE_R, PTE_X, PGSIZE, memlayout::{TRAMPOLINE, TRAPFRAME}},
+    arch::riscv::{
+        memlayout::{TRAMPOLINE, TRAPFRAME},
+        Pagetable, PGSIZE, PTE_R, PTE_W, PTE_X,
+    },
     fs::{
-        file::{File, Inode, filedup, fileclose},
-        idup,
-        iput,
+        file::{fileclose, filedup, File, Inode},
+        idup, iput,
         log::LogOperation,
     },
     mem::{
-        kalloc::{kfree, kalloc},
+        kalloc::{kalloc, kfree},
         memset,
-        virtual_memory::{uvmcreate, uvmfree, uvmunmap, mappages, uvmalloc, uvmdealloc, uvmcopy},
+        virtual_memory::{
+            copyout, mappages, uvmalloc, uvmcopy, uvmcreate, uvmdealloc, uvmfree, uvmunmap,
+        },
     },
-    sync::spinlock::Spinlock,
     string::safestrcpy,
-    println,
+    sync::spinlock::Spinlock,
 };
 use core::{
     ffi::{c_char, c_void},
@@ -65,6 +73,9 @@ pub enum ProcessState {
 pub enum ProcessError {
     MaxProcesses,
     Allocation,
+    NoChildren,
+    Killed,
+    PageError,
 }
 
 /// Per-process state.
@@ -180,7 +191,11 @@ impl Process {
 
         // Set up new context to start executing at forkret,
         // which returns to userspace.
-        memset(addr_of_mut!(p.context).cast(), 0, core::mem::size_of::<Context>() as u32);
+        memset(
+            addr_of_mut!(p.context).cast(),
+            0,
+            core::mem::size_of::<Context>() as u32,
+        );
         p.context.ra = forkret as usize as u64;
         p.context.sp = p.kstack + PGSIZE;
 
@@ -213,7 +228,12 @@ impl Process {
         let mut size = self.sz;
 
         if num_bytes > 0 {
-            size = uvmalloc(self.pagetable, size, size.wrapping_add(num_bytes as u64), PTE_W);
+            size = uvmalloc(
+                self.pagetable,
+                size,
+                size.wrapping_add(num_bytes as u64),
+                PTE_W,
+            );
 
             if size == 0 {
                 return Err(ProcessError::Allocation);
@@ -234,23 +254,37 @@ impl Process {
         if pagetable.is_null() {
             return Err(ProcessError::Allocation);
         }
-        
+
         // Map the trampoline code (for syscall return)
         // at the highest user virtual address.
         // Only the supervisor uses it on the way
         // to and from user space, so not PTE_U.
-        if mappages(pagetable, TRAMPOLINE, PGSIZE, addr_of!(trampoline) as usize as u64, PTE_R | PTE_X) < 0 {
+        if mappages(
+            pagetable,
+            TRAMPOLINE,
+            PGSIZE,
+            addr_of!(trampoline) as usize as u64,
+            PTE_R | PTE_X,
+        ) < 0
+        {
             uvmfree(pagetable, 0);
             return Err(ProcessError::Allocation);
         }
 
         // Map the trapframe page just below the trampoline page for trampoline.S.
-        if mappages(pagetable, TRAPFRAME, PGSIZE, self.trapframe as usize as u64, PTE_R | PTE_W) < 0 {
+        if mappages(
+            pagetable,
+            TRAPFRAME,
+            PGSIZE,
+            self.trapframe as usize as u64,
+            PTE_R | PTE_W,
+        ) < 0
+        {
             uvmunmap(pagetable, TRAMPOLINE, 1, 0);
             uvmfree(pagetable, 0);
             return Err(ProcessError::Allocation);
         }
-        
+
         Ok(pagetable)
     }
     /// Free a process's pagetable and free the physical memory it refers to.
@@ -288,8 +322,12 @@ impl Process {
         }
         child.cwd = idup(parent.cwd);
 
-        safestrcpy(addr_of!(child.name[0]).cast_mut().cast(), addr_of!(parent.name[0]).cast_mut().cast(), parent.name.len() as i32);
-        
+        safestrcpy(
+            addr_of!(child.name[0]).cast_mut().cast(),
+            addr_of!(parent.name[0]).cast_mut().cast(),
+            parent.name.len() as i32,
+        );
+
         let pid = child.pid;
 
         child.lock.unlock();
@@ -354,8 +392,58 @@ impl Process {
 
         // Jump into the scheduler, never to return.
         sched();
+        unreachable!();
+    }
+
+    /// Wait for a child process to exit, and return its pid.
+    pub unsafe fn wait_for_child(&mut self, addr: u64) -> Result<i32, ProcessError> {
+        let guard = wait_lock.lock();
+
         loop {
-            unreachable!();
+            // Scan through the table looking for exited children.
+            let mut has_children = false;
+
+            for p in &mut proc {
+                if p.parent == addr_of_mut!(*self) {
+                    has_children = true;
+
+                    // Ensure the child isn't still in exit() or swtch().
+                    p.lock.lock_unguarded();
+
+                    if p.state == ProcessState::Zombie {
+                        // Found an exited child.
+                        let pid = p.pid;
+
+                        if addr != 0
+                            && copyout(
+                                self.pagetable,
+                                addr,
+                                addr_of_mut!(p.xstate).cast(),
+                                core::mem::size_of::<i32>() as u64,
+                            ) < 0
+                        {
+                            p.lock.unlock();
+                            return Err(ProcessError::PageError);
+                        }
+
+                        p.free();
+                        p.lock.unlock();
+                        return Ok(pid);
+                    }
+
+                    p.lock.unlock();
+                }
+            }
+
+            if !has_children {
+                return Err(ProcessError::NoChildren);
+            } else if self.is_killed() {
+                return Err(ProcessError::Killed);
+            }
+
+            // Wait for child to exit.
+            // DOC: wait-sleep
+            guard.sleep(addr_of_mut!(*self).cast());
         }
     }
 
@@ -406,24 +494,12 @@ pub extern "C" fn myproc() -> *mut Process {
 }
 
 #[no_mangle]
-pub extern "C" fn allocpid() -> i32 {
-    Process::alloc_pid()
-}
-
-#[no_mangle]
 pub unsafe extern "C" fn allocproc() -> *mut Process {
     if let Ok(process) = Process::alloc() {
         process as *mut Process
     } else {
         null_mut()
     }
-}
-
-/// Free a proc structure and the data hanging from it, including user pages.
-/// p->lock must be held.
-#[no_mangle]
-pub unsafe extern "C" fn freeproc(p: *mut Process) {
-    (*p).free();
 }
 
 #[no_mangle]
@@ -434,40 +510,4 @@ pub unsafe extern "C" fn proc_pagetable(p: *mut Process) -> Pagetable {
 #[no_mangle]
 pub unsafe extern "C" fn proc_freepagetable(pagetable: Pagetable, size: u64) {
     Process::free_pagetable(pagetable, size as usize)
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn reparent(p: *mut Process) {
-    (*p).reparent()
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn exit(status: i32) -> ! {
-    Process::current().unwrap().exit(status)
-}
-
-/// Kill the process with the given pid.
-/// The victim won't exit until it tries to return
-/// to user space (see usertrap() in trap.c).
-#[no_mangle]
-pub unsafe extern "C" fn kill(pid: i32) -> i32 {
-    if Process::kill(pid) {
-        1
-    } else {
-        0
-    }
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn setkilled(p: *mut Process) {
-    (*p).set_killed(true);
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn killed(p: *mut Process) -> i32 {
-    if (*p).is_killed() {
-        1
-    } else {
-        0
-    }
 }

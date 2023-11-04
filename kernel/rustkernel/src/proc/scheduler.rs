@@ -52,7 +52,7 @@ pub unsafe fn scheduler() -> ! {
 
                 // Run the process.
                 swtch(addr_of_mut!(cpu.context), addr_of_mut!(p.context));
-                
+
                 // Process is done running for now.
                 // It should have changed its state before coming back.
                 cpu.proc = null_mut();

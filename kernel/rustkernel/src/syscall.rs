@@ -8,7 +8,7 @@ use crate::{
     },
     mem::virtual_memory::{copyin, copyinstr},
     println,
-    proc::process::{self, Process},
+    proc::process::Process,
     string::strlen,
     trap::CLOCK_TICKS,
     NOFILE,
@@ -66,7 +66,8 @@ impl Syscall {
             Syscall::Wait => {
                 let mut p = 0u64;
                 argaddr(0, addr_of_mut!(p));
-                process::wait(p) as u64
+                Process::current().unwrap().wait_for_child(p).unwrap_or(-1) as i64 as u64
+                // process::wait(p) as u64
             }
             Syscall::Pipe => sys_pipe(),
             Syscall::Read => {
