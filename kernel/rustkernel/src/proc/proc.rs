@@ -10,6 +10,7 @@ use crate::{
 use core::{
     ffi::{c_char, c_void},
     ptr::{addr_of_mut, null_mut},
+    sync::atomic::{AtomicI32, Ordering},
 };
 
 extern "C" {
@@ -44,6 +45,8 @@ extern "C" {
     pub fn scheduler() -> !;
     pub fn swtch(a: *mut Context, b: *mut Context);
 }
+
+pub static NEXT_PID: AtomicI32 = AtomicI32::new(1);
 
 #[repr(C)]
 #[derive(PartialEq, Default)]
@@ -164,7 +167,7 @@ impl Proc {
 
 /// Return the current struct proc *, or zero if none.
 #[no_mangle]
-pub unsafe extern "C" fn myproc() -> *mut Proc {
+pub extern "C" fn myproc() -> *mut Proc {
     if let Some(p) = Proc::current() {
         p as *mut Proc
     } else {
@@ -173,11 +176,8 @@ pub unsafe extern "C" fn myproc() -> *mut Proc {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn allocpid() -> i32 {
-    let _guard = pid_lock.lock();
-    let pid = nextpid;
-    nextpid += 1;
-    pid
+pub extern "C" fn allocpid() -> i32 {
+    NEXT_PID.fetch_add(1, Ordering::SeqCst)
 }
 
 /// Free a proc structure and the data hanging from it, including user pages.

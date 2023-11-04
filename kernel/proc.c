@@ -10,9 +10,6 @@ struct proc proc[NPROC];
 
 struct proc *initproc;
 
-int nextpid = 1;
-struct spinlock pid_lock;
-
 extern void forkret(void);
 void freeproc(struct proc *p);
 
@@ -46,8 +43,7 @@ void
 procinit(void)
 {
   struct proc *p;
-  
-  initlock(&pid_lock, "nextpid");
+
   initlock(&wait_lock, "wait_lock");
   for(p = proc; p < &proc[NPROC]; p++) {
       initlock(&p->lock, "proc");
