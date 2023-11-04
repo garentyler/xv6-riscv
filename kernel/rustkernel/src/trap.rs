@@ -3,7 +3,7 @@ use crate::{
     println,
     proc::{
         cpu::Cpu,
-        proc::{exit, r#yield, wakeup, Proc, ProcState},
+        process::{exit, r#yield, wakeup, Process, ProcessState},
     },
     sync::mutex::Mutex,
     syscall::syscall,
@@ -127,7 +127,7 @@ impl !Send for InterruptBlocker {}
 /// Return to user space
 #[no_mangle]
 pub unsafe extern "C" fn usertrapret() {
-    let proc = Proc::current().unwrap();
+    let proc = Process::current().unwrap();
 
     // We're about to switch the destination of traps from
     // kerneltrap() to usertrap(), so turn off interrupts until
@@ -196,8 +196,8 @@ pub unsafe extern "C" fn kerneltrap() {
         println!("scause {}\nsepc={} stval={}", scause, r_sepc(), r_stval());
         panic!("kerneltrap");
     } else if which_dev == 2
-        && Proc::current().is_some()
-        && Proc::current().unwrap().state == ProcState::Running
+        && Process::current().is_some()
+        && Process::current().unwrap().state == ProcessState::Running
     {
         // Give up the CPU if this is a timer interrupt.
         r#yield();
@@ -222,14 +222,14 @@ pub unsafe extern "C" fn usertrap() {
     // since we're now in the kernel.
     w_stvec(kernelvec as usize as u64);
 
-    let proc = Proc::current().unwrap();
+    let proc = Process::current().unwrap();
 
     // Save user program counter.
     (*proc.trapframe).epc = r_sepc();
 
     if r_scause() == 8 {
         // System call
-        
+
         if proc.is_killed() {
             exit(-1);
         }

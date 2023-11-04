@@ -1,5 +1,5 @@
 use crate::{
-    proc::proc::{sched, Proc, ProcState},
+    proc::process::{sched, Process, ProcessState},
     trap::{pop_intr_off, push_intr_off},
 };
 use core::{
@@ -46,13 +46,13 @@ pub struct SpinlockGuard<'l> {
 impl<'l> SpinlockGuard<'l> {
     /// Sleep until `wakeup(chan)` is called somewhere else, yielding the lock until then.
     pub unsafe fn sleep(&self, chan: *mut core::ffi::c_void) {
-        let proc = Proc::current().unwrap();
+        let proc = Process::current().unwrap();
         let _guard = proc.lock.lock();
         self.lock.unlock();
 
         // Put the process to sleep.
         proc.chan = chan;
-        proc.state = ProcState::Sleeping;
+        proc.state = ProcessState::Sleeping;
         sched();
 
         // Tidy up and reacquire the lock.

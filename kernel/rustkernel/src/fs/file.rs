@@ -4,7 +4,7 @@ use crate::{
     fs::{log, stat::Stat},
     io::pipe::Pipe,
     mem::virtual_memory::copyout,
-    proc::proc::Proc,
+    proc::process::Process,
     sync::{sleeplock::Sleeplock, spinlock::Spinlock},
 };
 use core::ptr::{addr_of_mut, null_mut};
@@ -206,7 +206,7 @@ pub unsafe extern "C" fn fileclose(file: *mut File) {
 /// `addr` is a user virtual address, pointing to a Stat.
 #[no_mangle]
 pub unsafe extern "C" fn filestat(file: *mut File, addr: u64) -> i32 {
-    let proc = Proc::current().unwrap();
+    let proc = Process::current().unwrap();
     let mut stat = Stat::default();
 
     if (*file).kind == FileType::Inode || (*file).kind == FileType::Device {

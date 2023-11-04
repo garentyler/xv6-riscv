@@ -1,5 +1,5 @@
 use super::LockStrategy;
-use crate::proc::proc::{sched, sleep, wakeup, Proc, ProcState};
+use crate::proc::process::{sched, sleep, wakeup, Process, ProcessState};
 use core::{
     cell::UnsafeCell,
     ops::Drop,
@@ -83,14 +83,14 @@ impl<'l> LockGuard<'l> {
     /// Sleep until `wakeup(chan)` is called somewhere
     /// else, yielding access to the lock until then.
     pub unsafe fn sleep(&self, chan: *mut core::ffi::c_void) {
-        let proc = Proc::current().unwrap();
+        let proc = Process::current().unwrap();
         let _guard = proc.lock.lock();
         let strategy = self.lock.lock_strategy();
         self.lock.unlock();
 
         // Put the process to sleep.
         proc.chan = chan;
-        proc.state = ProcState::Sleeping;
+        proc.state = ProcessState::Sleeping;
         sched();
 
         // Tidy up and reacquire the lock.

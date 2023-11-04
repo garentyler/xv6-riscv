@@ -14,8 +14,8 @@ use core::{
 };
 
 extern "C" {
-    pub static mut proc: [Proc; crate::NPROC];
-    pub static mut initproc: *mut Proc;
+    pub static mut proc: [Process; crate::NPROC];
+    pub static mut initproc: *mut Process;
     pub static mut nextpid: i32;
     pub static mut pid_lock: Spinlock;
     /// Helps ensure that wakeups of wait()ing
@@ -34,11 +34,11 @@ extern "C" {
     pub fn wait(addr: u64) -> i32;
     pub fn procdump();
     pub fn proc_mapstacks(kpgtbl: Pagetable);
-    pub fn proc_pagetable(p: *mut Proc) -> Pagetable;
+    pub fn proc_pagetable(p: *mut Process) -> Pagetable;
     pub fn proc_freepagetable(pagetable: Pagetable, sz: u64);
     pub fn wakeup(chan: *const c_void);
-    pub fn allocproc() -> *mut Proc;
-    // pub fn freeproc(p: *mut Proc);
+    pub fn allocproc() -> *mut Process;
+    // pub fn freeproc(p: *mut Process);
     pub fn uvmalloc(pagetable: Pagetable, oldsz: u64, newsz: u64, xperm: i32) -> u64;
     pub fn uvmdealloc(pagetable: Pagetable, oldsz: u64, newsz: u64) -> u64;
     // pub fn sched();
@@ -50,7 +50,7 @@ pub static NEXT_PID: AtomicI32 = AtomicI32::new(1);
 
 #[repr(C)]
 #[derive(PartialEq, Default)]
-pub enum ProcState {
+pub enum ProcessState {
     #[default]
     Unused,
     Used,
@@ -62,12 +62,12 @@ pub enum ProcState {
 
 /// Per-process state.
 #[repr(C)]
-pub struct Proc {
+pub struct Process {
     pub lock: Spinlock,
 
     // p->lock must be held when using these:
     /// Process state
-    pub state: ProcState,
+    pub state: ProcessState,
     /// If non-zero, sleeping on chan
     pub chan: *mut c_void,
     /// If non-zero, have been killed
@@ -79,7 +79,7 @@ pub struct Proc {
 
     // wait_lock msut be held when using this:
     /// Parent process
-    pub parent: *mut Proc,
+    pub parent: *mut Process,
 
     // These are private to the process, so p->lock need not be held.
     /// Virtual address of kernel stack
@@ -99,11 +99,11 @@ pub struct Proc {
     /// Process name (debugging)
     pub name: [c_char; 16],
 }
-impl Proc {
-    pub const fn new() -> Proc {
-        Proc {
+impl Process {
+    pub const fn new() -> Process {
+        Process {
             lock: Spinlock::new(),
-            state: ProcState::Unused,
+            state: ProcessState::Unused,
             chan: null_mut(),
             killed: 0,
             xstate: 0,
@@ -119,7 +119,7 @@ impl Proc {
             name: [0x00; 16],
         }
     }
-    pub fn current() -> Option<&'static mut Proc> {
+    pub fn current() -> Option<&'static mut Process> {
         let _ = crate::trap::InterruptBlocker::new();
         let p = Cpu::current().proc;
         if p.is_null() {
@@ -147,7 +147,7 @@ impl Proc {
         self.chan = null_mut();
         self.killed = 0;
         self.xstate = 0;
-        self.state = ProcState::Unused;
+        self.state = ProcessState::Unused;
     }
 
     /// Kill the process with the given pid.
@@ -157,15 +157,15 @@ impl Proc {
     pub unsafe fn kill(pid: i32) -> bool {
         for p in &mut proc {
             let _guard = p.lock.lock();
-        
+
             if p.pid == pid {
                 p.killed = 1;
-            
-                if p.state == ProcState::Sleeping {
+
+                if p.state == ProcessState::Sleeping {
                     // Wake process from sleep().
-                    p.state = ProcState::Runnable;
+                    p.state = ProcessState::Runnable;
                 }
-            
+
                 return true;
             }
         }
@@ -188,9 +188,9 @@ impl Proc {
 
 /// Return the current struct proc *, or zero if none.
 #[no_mangle]
-pub extern "C" fn myproc() -> *mut Proc {
-    if let Some(p) = Proc::current() {
-        p as *mut Proc
+pub extern "C" fn myproc() -> *mut Process {
+    if let Some(p) = Process::current() {
+        p as *mut Process
     } else {
         null_mut()
     }
@@ -204,15 +204,15 @@ pub extern "C" fn allocpid() -> i32 {
 /// Free a proc structure and the data hanging from it, including user pages.
 /// p->lock must be held.
 #[no_mangle]
-pub unsafe extern "C" fn freeproc(p: *mut Proc) {
+pub unsafe extern "C" fn freeproc(p: *mut Process) {
     (*p).free();
 }
 
 /// Pass p's abandoned children to init.
 /// Caller must hold wait_lock.
 #[no_mangle]
-pub unsafe extern "C" fn reparent(p: *mut Proc) {
-    for pp in proc.iter_mut().map(|p: &mut Proc| addr_of_mut!(*p)) {
+pub unsafe extern "C" fn reparent(p: *mut Process) {
+    for pp in proc.iter_mut().map(|p: &mut Process| addr_of_mut!(*p)) {
         if (*pp).parent == p {
             (*pp).parent = initproc;
             wakeup(initproc.cast());
@@ -223,7 +223,7 @@ pub unsafe extern "C" fn reparent(p: *mut Proc) {
 /// Grow or shrink user memory by n bytes.
 /// Return 0 on success, -1 on failure.
 pub unsafe fn growproc(n: i32) -> i32 {
-    let p = Proc::current().unwrap();
+    let p = Process::current().unwrap();
     let mut sz = p.sz;
 
     if n > 0 {
@@ -240,9 +240,9 @@ pub unsafe fn growproc(n: i32) -> i32 {
 
 /// Give up the CPU for one scheduling round.
 pub unsafe fn r#yield() {
-    let p = Proc::current().unwrap();
+    let p = Process::current().unwrap();
     let _guard = p.lock.lock();
-    p.state = ProcState::Runnable;
+    p.state = ProcessState::Runnable;
     sched();
 }
 
@@ -255,12 +255,12 @@ pub unsafe fn r#yield() {
 /// there's no process.
 #[no_mangle]
 pub unsafe extern "C" fn sched() {
-    let p = Proc::current().unwrap();
+    let p = Process::current().unwrap();
     let cpu = Cpu::current();
 
     if cpu.interrupt_disable_layers != 1 {
         panic!("sched locks");
-    } else if p.state == ProcState::Running {
+    } else if p.state == ProcessState::Running {
         panic!("sched running");
     } else if intr_get() > 0 {
         panic!("sched interruptible");
@@ -283,12 +283,12 @@ pub unsafe extern "C" fn sleep_lock(chan: *mut c_void, lock: *mut Spinlock) {
 
 /// Sleep until `wakeup(chan)` is called somewhere else.
 pub unsafe fn sleep(chan: *mut c_void) {
-    let p = Proc::current().unwrap();
+    let p = Process::current().unwrap();
     let _guard = p.lock.lock();
 
     // Go to sleep.
     p.chan = chan;
-    p.state = ProcState::Sleeping;
+    p.state = ProcessState::Sleeping;
 
     sched();
 
@@ -301,7 +301,7 @@ pub unsafe fn sleep(chan: *mut c_void) {
 /// to user space (see usertrap() in trap.c).
 #[no_mangle]
 pub unsafe extern "C" fn kill(pid: i32) -> i32 {
-    if Proc::kill(pid) {
+    if Process::kill(pid) {
         1
     } else {
         0
@@ -309,12 +309,12 @@ pub unsafe extern "C" fn kill(pid: i32) -> i32 {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn setkilled(p: *mut Proc) {
+pub unsafe extern "C" fn setkilled(p: *mut Process) {
     (*p).set_killed(true);
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn killed(p: *mut Proc) -> i32 {
+pub unsafe extern "C" fn killed(p: *mut Process) -> i32 {
     if (*p).is_killed() {
         1
     } else {

@@ -1,4 +1,4 @@
-use super::{context::Context, proc::Proc};
+use super::{context::Context, process::Process};
 use crate::arch::riscv::asm::r_tp;
 use core::ptr::{addr_of_mut, null_mut};
 
@@ -8,7 +8,7 @@ pub static mut CPUS: [Cpu; crate::NCPU] = [Cpu::new(); crate::NCPU];
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct Cpu {
-    pub proc: *mut Proc,
+    pub proc: *mut Process,
     /// swtch() here to enter scheduler()
     pub context: Context,
     /// Depth of push_off() nesting.

@@ -7,7 +7,7 @@ use crate::{
         kalloc::{kalloc, kfree},
         memmove, memset,
     },
-    proc::proc::proc_mapstacks,
+    proc::process::proc_mapstacks,
 };
 use core::ptr::{addr_of, addr_of_mut, null_mut};
 

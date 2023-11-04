@@ -63,7 +63,7 @@ pub unsafe fn main() -> ! {
         println!("\nxv6 kernel is booting");
         mem::virtual_memory::kvminit();
         mem::virtual_memory::kvminithart();
-        proc::proc::procinit();
+        proc::process::procinit();
         trap::trapinithart();
         arch::riscv::plic::plicinit();
         arch::riscv::plic::plicinithart();
@@ -71,7 +71,7 @@ pub unsafe fn main() -> ! {
         fs::iinit();
         fs::file::fileinit();
         fs::virtio_disk::virtio_disk_init();
-        proc::proc::userinit();
+        proc::process::userinit();
         STARTED = true;
     } else {
         while !STARTED {
@@ -82,7 +82,7 @@ pub unsafe fn main() -> ! {
         arch::riscv::plic::plicinithart();
     }
 
-    proc::proc::scheduler();
+    proc::process::scheduler();
 }
 
 #[panic_handler]

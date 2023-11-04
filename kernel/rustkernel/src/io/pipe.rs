@@ -4,7 +4,7 @@ use crate::{
         kalloc::{kalloc, kfree},
         virtual_memory::{copyin, copyout},
     },
-    proc::proc::{wakeup, Proc},
+    proc::process::{wakeup, Process},
     sync::spinlock::Spinlock,
 };
 use core::ptr::{addr_of, addr_of_mut};
@@ -88,7 +88,7 @@ impl Pipe {
     }
     pub unsafe fn write(&self, addr: u64, num_bytes: usize) -> Result<usize> {
         let mut i = 0;
-        let proc = Proc::current().unwrap();
+        let proc = Process::current().unwrap();
         let guard = self.lock.lock();
 
         while i < num_bytes {
@@ -116,7 +116,7 @@ impl Pipe {
     #[allow(clippy::while_immutable_condition)]
     pub unsafe fn read(&self, addr: u64, num_bytes: usize) -> Result<usize> {
         let mut i = 0;
-        let proc = Proc::current().unwrap();
+        let proc = Process::current().unwrap();
         let guard = self.lock.lock();
 
         // DOC: pipe-empty

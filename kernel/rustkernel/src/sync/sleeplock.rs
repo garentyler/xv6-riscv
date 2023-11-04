@@ -1,4 +1,4 @@
-use crate::proc::proc::{sleep, wakeup};
+use crate::proc::process::{sleep, wakeup};
 use core::{
     ffi::c_char,
     ptr::addr_of,
