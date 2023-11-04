@@ -4,7 +4,7 @@ use crate::{
         kalloc::{kalloc, kfree},
         virtual_memory::{copyin, copyout},
     },
-    proc::process::{wakeup, Process},
+    proc::{process::Process, scheduler::wakeup},
     sync::spinlock::Spinlock,
 };
 use core::ptr::{addr_of, addr_of_mut};

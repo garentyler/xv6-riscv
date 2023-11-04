@@ -3,7 +3,8 @@ use crate::{
     println,
     proc::{
         cpu::Cpu,
-        process::{exit, r#yield, wakeup, Process, ProcessState},
+        process::{exit, Process, ProcessState},
+        scheduler::{r#yield, wakeup},
     },
     sync::mutex::Mutex,
     syscall::syscall,

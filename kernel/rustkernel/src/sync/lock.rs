@@ -1,5 +1,8 @@
 use super::LockStrategy;
-use crate::proc::process::{sched, sleep, wakeup, Process, ProcessState};
+use crate::proc::{
+    process::{Process, ProcessState},
+    scheduler::{sched, sleep, wakeup},
+};
 use core::{
     cell::UnsafeCell,
     ops::Drop,

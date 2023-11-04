@@ -82,7 +82,7 @@ pub unsafe fn main() -> ! {
         arch::riscv::plic::plicinithart();
     }
 
-    proc::process::scheduler();
+    proc::scheduler::scheduler();
 }
 
 #[panic_handler]

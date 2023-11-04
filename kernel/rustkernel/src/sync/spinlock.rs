@@ -1,5 +1,8 @@
 use crate::{
-    proc::process::{sched, Process, ProcessState},
+    proc::{
+        process::{Process, ProcessState},
+        scheduler::sched,
+    },
     trap::{pop_intr_off, push_intr_off},
 };
 use core::{
