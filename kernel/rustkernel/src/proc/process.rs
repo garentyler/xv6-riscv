@@ -3,13 +3,14 @@
 use super::{context::Context, cpu::Cpu, scheduler::wakeup, trapframe::Trapframe};
 use crate::{
     arch::riscv::{Pagetable, PTE_W, PTE_R, PTE_X, PGSIZE, memlayout::{TRAMPOLINE, TRAPFRAME}},
-    fs::file::{File, Inode},
+    fs::{file::{File, Inode, filedup}, idup},
     mem::{
         kalloc::{kfree, kalloc},
         memset,
-        virtual_memory::{uvmcreate, uvmfree, uvmunmap, mappages},
+        virtual_memory::{uvmcreate, uvmfree, uvmunmap, mappages, uvmalloc, uvmdealloc, uvmcopy},
     },
     sync::spinlock::Spinlock,
+    string::safestrcpy,
 };
 use core::{
     ffi::{c_char, c_void},
@@ -33,16 +34,11 @@ extern "C" {
     pub fn procinit();
     pub fn userinit();
     pub fn forkret();
-    pub fn fork() -> i32;
+    // pub fn fork() -> i32;
     pub fn exit(status: i32) -> !;
     pub fn wait(addr: u64) -> i32;
     pub fn procdump();
     pub fn proc_mapstacks(kpgtbl: Pagetable);
-    // pub fn proc_pagetable(p: *mut Process) -> Pagetable;
-    // pub fn proc_freepagetable(pagetable: Pagetable, sz: u64);
-    // pub fn allocproc() -> *mut Process;
-    pub fn uvmalloc(pagetable: Pagetable, oldsz: u64, newsz: u64, xperm: i32) -> u64;
-    pub fn uvmdealloc(pagetable: Pagetable, oldsz: u64, newsz: u64) -> u64;
 }
 
 pub static NEXT_PID: AtomicI32 = AtomicI32::new(1);
@@ -256,6 +252,51 @@ impl Process {
         uvmunmap(pagetable, TRAMPOLINE, 1, 0);
         uvmunmap(pagetable, TRAPFRAME, 1, 0);
         uvmfree(pagetable, size as u64)
+    }
+
+    /// Create a new process, copying the parent.
+    /// Sets up child kernel stack to return as if from fork() syscall.
+    pub unsafe fn fork() -> Result<i32, ProcessError> {
+        let parent = Process::current().unwrap();
+        let child = Process::alloc()?;
+
+        // Copy user memory from parent to child.
+        if uvmcopy(parent.pagetable, child.pagetable, parent.sz) < 0 {
+            child.free();
+            child.lock.unlock();
+            return Err(ProcessError::Allocation);
+        }
+        child.sz = parent.sz;
+
+        // Copy saved user registers.
+        *child.trapframe = *parent.trapframe;
+
+        // Cause fork to return 0 in the child.
+        (*child.trapframe).a0 = 0;
+
+        // Increment reference counts on open file descriptors.
+        for (i, file) in parent.ofile.iter().enumerate() {
+            if !file.is_null() {
+                child.ofile[i] = filedup(parent.ofile[i]);
+            }
+        }
+        child.cwd = idup(parent.cwd);
+
+        safestrcpy(addr_of!(child.name[0]).cast_mut().cast(), addr_of!(parent.name[0]).cast_mut().cast(), parent.name.len() as i32);
+        
+        let pid = child.pid;
+
+        child.lock.unlock();
+        {
+            let _guard = wait_lock.lock();
+            child.parent = addr_of!(*parent).cast_mut();
+        }
+        {
+            let _guard = child.lock.lock();
+            child.state = ProcessState::Runnable;
+        }
+
+        Ok(pid)
     }
 
     /// Kill the process with the given pid.

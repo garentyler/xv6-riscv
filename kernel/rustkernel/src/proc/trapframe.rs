@@ -12,7 +12,7 @@
 /// return-to-user path via usertrapret() doesn't return through
 /// the entire kernel call stack.
 #[repr(C)]
-#[derive(Default)]
+#[derive(Copy, Clone, Default)]
 pub struct Trapframe {
     /// Kernel page table.
     pub kernel_satp: u64,

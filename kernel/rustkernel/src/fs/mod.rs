@@ -91,7 +91,7 @@ extern "C" {
     pub fn iinit();
     pub fn ialloc(dev: u32, kind: i16) -> *mut DiskInode;
     pub fn iupdate(ip: *mut DiskInode);
-    pub fn idup(ip: *mut DiskInode) -> *mut DiskInode;
+    pub fn idup(ip: *mut Inode) -> *mut Inode;
     pub fn ilock(ip: *mut Inode);
     pub fn iunlock(ip: *mut Inode);
     pub fn iput(ip: *mut Inode);

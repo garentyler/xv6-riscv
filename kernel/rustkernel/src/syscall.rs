@@ -57,7 +57,7 @@ pub enum Syscall {
 impl Syscall {
     pub unsafe fn call(&self) -> u64 {
         match self {
-            Syscall::Fork => process::fork() as u64,
+            Syscall::Fork => Process::fork().unwrap_or(-1) as i64 as u64,
             Syscall::Exit => {
                 let mut n = 0i32;
                 argint(0, addr_of_mut!(n));
