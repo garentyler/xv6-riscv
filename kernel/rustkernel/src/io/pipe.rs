@@ -4,7 +4,7 @@ use crate::{
         kalloc::{kalloc, kfree},
         virtual_memory::{copyin, copyout},
     },
-    proc::proc::{killed, wakeup, Proc},
+    proc::proc::{wakeup, Proc},
     sync::spinlock::Spinlock,
 };
 use core::ptr::{addr_of, addr_of_mut};
@@ -92,7 +92,7 @@ impl Pipe {
         let guard = self.lock.lock();
 
         while i < num_bytes {
-            if self.is_read_open == 0 || killed(addr_of_mut!(*proc)) > 0 {
+            if self.is_read_open == 0 || proc.is_killed() {
                 return Err(PipeError::ProcessKilled);
             }
             if self.bytes_written == self.bytes_read + PIPESIZE as u32 {
@@ -121,7 +121,7 @@ impl Pipe {
 
         // DOC: pipe-empty
         while self.bytes_read == self.bytes_written && self.is_write_open > 0 {
-            if killed(addr_of_mut!(*proc)) > 0 {
+            if proc.is_killed() {
                 return Err(PipeError::ProcessKilled);
             } else {
                 // DOC: piperead-sleep

@@ -125,6 +125,41 @@ impl Proc {
             unsafe { Some(&mut *p) }
         }
     }
+    /// Kill the process with the given pid.
+    /// Returns true if the process was killed.
+    /// The victim won't exit until it tries to return
+    /// to user space (see usertrap() in trap.c).
+    pub unsafe fn kill(pid: i32) -> bool {
+        for p in &mut proc {
+            let _guard = p.lock.lock();
+        
+            if p.pid == pid {
+                p.killed = 1;
+            
+                if p.state == ProcState::Sleeping {
+                    // Wake process from sleep().
+                    p.state = ProcState::Runnable;
+                }
+            
+                return true;
+            }
+        }
+
+        false
+    }
+
+    pub fn is_killed(&self) -> bool {
+        let _guard = self.lock.lock();
+        self.killed > 0
+    }
+    pub fn set_killed(&mut self, killed: bool) {
+        let _guard = self.lock.lock();
+        if killed {
+            self.killed = 1;
+        } else {
+            self.killed = 0;
+        }
+    }
 }
 
 /// Return the current struct proc *, or zero if none.
@@ -260,31 +295,23 @@ pub unsafe fn sleep(chan: *mut c_void) {
 /// to user space (see usertrap() in trap.c).
 #[no_mangle]
 pub unsafe extern "C" fn kill(pid: i32) -> i32 {
-    for p in &mut proc {
-        let _guard = p.lock.lock();
-
-        if p.pid == pid {
-            p.killed = 1;
-
-            if p.state == ProcState::Sleeping {
-                // Wake process from sleep().
-                p.state = ProcState::Runnable;
-            }
-
-            return 0;
-        }
+    if Proc::kill(pid) {
+        1
+    } else {
+        0
     }
-    -1
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn setkilled(p: *mut Proc) {
-    let _guard = (*p).lock.lock();
-    (*p).killed = 1;
+    (*p).set_killed(true);
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn killed(p: *mut Proc) -> i32 {
-    let _guard = (*p).lock.lock();
-    (*p).killed
+    if (*p).is_killed() {
+        1
+    } else {
+        0
+    }
 }

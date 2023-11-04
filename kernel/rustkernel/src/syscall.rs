@@ -85,7 +85,7 @@ impl Syscall {
             Syscall::Kill => {
                 let mut pid = 0i32;
                 argint(0, addr_of_mut!(pid));
-                proc::kill(pid) as u64
+                Proc::kill(pid) as u64
             }
             Syscall::Exec => sys_exec(),
             Syscall::Fstat => {
@@ -157,7 +157,7 @@ impl Syscall {
                 let mut ticks = CLOCK_TICKS.lock_spinning();
 
                 while *ticks < *ticks + n as usize {
-                    if proc::killed(addr_of!(*Proc::current().unwrap()).cast_mut()) > 0 {
+                    if Proc::current().unwrap().is_killed() {
                         return -1i64 as u64;
                     }
                     // Sleep until the value changes.

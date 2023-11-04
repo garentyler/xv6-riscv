@@ -13,7 +13,7 @@ pub mod uart;
 
 use crate::{
     fs::file::{devsw, CONSOLE},
-    proc::proc::{killed, procdump, wakeup, Proc},
+    proc::proc::{procdump, wakeup, Proc},
     sync::mutex::Mutex,
 };
 use core::{ffi::c_void, ptr::addr_of_mut};
@@ -114,7 +114,7 @@ pub fn consoleread(user_dst: i32, mut dst: u64, mut n: i32) -> i32 {
             // Wait until interrupt handler has put
             // some input into cons.buffer.
             while console.read_index == console.write_index {
-                if killed(addr_of_mut!(*Proc::current().unwrap())) != 0 {
+                if Proc::current().unwrap().is_killed() {
                     // cons.lock.unlock();
                     return -1;
                 }

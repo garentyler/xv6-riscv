@@ -3,12 +3,12 @@ use crate::{
     println,
     proc::{
         cpu::Cpu,
-        proc::{exit, killed, r#yield, setkilled, wakeup, Proc, ProcState},
+        proc::{exit, r#yield, wakeup, Proc, ProcState},
     },
     sync::mutex::Mutex,
     syscall::syscall,
 };
-use core::ptr::{addr_of, addr_of_mut};
+use core::ptr::addr_of;
 
 extern "C" {
     pub fn kernelvec();
@@ -229,8 +229,8 @@ pub unsafe extern "C" fn usertrap() {
 
     if r_scause() == 8 {
         // System call
-
-        if killed(addr_of_mut!(*proc)) > 0 {
+        
+        if proc.is_killed() {
             exit(-1);
         }
 
@@ -254,10 +254,10 @@ pub unsafe extern "C" fn usertrap() {
             r_sepc(),
             r_stval()
         );
-        setkilled(addr_of_mut!(*proc));
+        proc.set_killed(true);
     }
 
-    if killed(addr_of_mut!(*proc)) > 0 {
+    if proc.is_killed() {
         exit(-1);
     }
 
