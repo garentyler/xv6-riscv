@@ -96,7 +96,6 @@ userinit(void)
   p->trapframe->epc = 0;      // user program counter
   p->trapframe->sp = PGSIZE;  // user stack pointer
 
-  safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
 
   p->state = RUNNABLE;
@@ -187,8 +186,6 @@ void procdump(void)
     printint(p->pid);
     printstr(" ");
     printstr(state);
-    printstr(" ");
-    printstr(p->name);
     printstr("\n");
   }
 }

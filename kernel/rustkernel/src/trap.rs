@@ -145,7 +145,7 @@ pub unsafe extern "C" fn usertrapret() {
     // kernel page table
     (*proc.trapframe).kernel_satp = r_satp();
     // process's kernel stack
-    (*proc.trapframe).kernel_sp = proc.kstack + PGSIZE;
+    (*proc.trapframe).kernel_sp = proc.kernel_stack + PGSIZE;
     (*proc.trapframe).kernel_trap = usertrap as usize as u64;
     // hartid for Cpu::current_id()
     (*proc.trapframe).kernel_hartid = r_tp();

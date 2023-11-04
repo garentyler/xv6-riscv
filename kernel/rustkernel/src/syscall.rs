@@ -121,8 +121,8 @@ impl Syscall {
                     return -1i64 as u64;
                 }
                 fs::iunlock(inode);
-                fs::iput(proc.cwd);
-                proc.cwd = inode;
+                fs::iput(proc.current_dir);
+                proc.current_dir = inode;
                 0
             }
             Syscall::Dup => {
@@ -144,7 +144,7 @@ impl Syscall {
                 let mut n = 0i32;
                 argint(0, addr_of_mut!(n));
                 let proc = Process::current().unwrap();
-                let addr = proc.sz;
+                let addr = proc.memory_allocated;
 
                 if unsafe { proc.grow_memory(n).is_ok() } {
                     addr
@@ -193,7 +193,7 @@ impl Syscall {
                 let mut file: *mut File = null_mut();
 
                 if argfd(0, addr_of_mut!(file_descriptor), addr_of_mut!(file)) >= 0 {
-                    Process::current().unwrap().ofile[file_descriptor as usize] = null_mut();
+                    Process::current().unwrap().open_files[file_descriptor as usize] = null_mut();
                     file::fileclose(file);
                     0
                 } else {
@@ -274,8 +274,8 @@ pub unsafe extern "C" fn fetchaddr(addr: u64, ip: *mut u64) -> i32 {
     let proc = Process::current().unwrap();
 
     // Both tests needed, in case of overflow.
-    if addr >= proc.sz
-        || addr + size_of::<u64>() as u64 > proc.sz
+    if addr >= proc.memory_allocated
+        || addr + size_of::<u64>() as u64 > proc.memory_allocated
         || copyin(
             proc.pagetable,
             ip.cast(),
@@ -309,8 +309,8 @@ unsafe fn fdalloc(file: *mut File) -> Result<usize, ()> {
     let proc = Process::current().unwrap();
 
     for file_descriptor in 0..crate::NOFILE {
-        if proc.ofile[file_descriptor].is_null() {
-            proc.ofile[file_descriptor] = file;
+        if proc.open_files[file_descriptor].is_null() {
+            proc.open_files[file_descriptor] = file;
             return Ok(file_descriptor);
         }
     }
@@ -359,7 +359,7 @@ pub unsafe extern "C" fn argfd(
         return -1;
     }
 
-    let file: *mut File = Process::current().unwrap().ofile[file_descriptor];
+    let file: *mut File = Process::current().unwrap().open_files[file_descriptor];
     if file.is_null() {
         return -1;
     }

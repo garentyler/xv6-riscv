@@ -91,7 +91,7 @@ pub struct Process {
     /// If non-zero, have been killed
     pub killed: i32,
     /// Exit status to be returned to parent's wait
-    pub xstate: i32,
+    pub exit_status: i32,
     /// Process ID
     pub pid: i32,
 
@@ -101,9 +101,9 @@ pub struct Process {
 
     // These are private to the process, so p->lock need not be held.
     /// Virtual address of kernel stack
-    pub kstack: u64,
+    pub kernel_stack: u64,
     /// Size of process memory (bytes)
-    pub sz: u64,
+    pub memory_allocated: u64,
     /// User page table
     pub pagetable: Pagetable,
     /// Data page for trampoline.S
@@ -111,11 +111,9 @@ pub struct Process {
     /// swtch() here to run process
     pub context: Context,
     /// Open files
-    pub ofile: [*mut File; crate::NOFILE],
+    pub open_files: [*mut File; crate::NOFILE],
     /// Current directory
-    pub cwd: *mut Inode,
-    /// Process name (debugging)
-    pub name: [c_char; 16],
+    pub current_dir: *mut Inode,
 }
 impl Process {
     pub const fn new() -> Process {
@@ -124,17 +122,16 @@ impl Process {
             state: ProcessState::Unused,
             chan: null_mut(),
             killed: 0,
-            xstate: 0,
+            exit_status: 0,
             pid: 0,
             parent: null_mut(),
-            kstack: 0,
-            sz: 0,
+            kernel_stack: 0,
+            memory_allocated: 0,
             pagetable: null_mut(),
             trapframe: null_mut(),
             context: Context::new(),
-            ofile: [null_mut(); crate::NOFILE],
-            cwd: null_mut(),
-            name: [0x00; 16],
+            open_files: [null_mut(); crate::NOFILE],
+            current_dir: null_mut(),
         }
     }
     pub fn current() -> Option<&'static mut Process> {
@@ -200,7 +197,7 @@ impl Process {
             core::mem::size_of::<Context>() as u32,
         );
         p.context.ra = forkret as usize as u64;
-        p.context.sp = p.kstack + PGSIZE;
+        p.context.sp = p.kernel_stack + PGSIZE;
 
         Ok(p)
     }
@@ -213,22 +210,21 @@ impl Process {
         }
         self.trapframe = null_mut();
         if !self.pagetable.is_null() {
-            proc_freepagetable(self.pagetable, self.sz);
+            proc_freepagetable(self.pagetable, self.memory_allocated);
         }
         self.pagetable = null_mut();
-        self.sz = 0;
+        self.memory_allocated = 0;
         self.pid = 0;
         self.parent = null_mut();
-        self.name[0] = 0;
         self.chan = null_mut();
         self.killed = 0;
-        self.xstate = 0;
+        self.exit_status = 0;
         self.state = ProcessState::Unused;
     }
 
     /// Grow or shrink user memory.
     pub unsafe fn grow_memory(&mut self, num_bytes: i32) -> Result<(), ProcessError> {
-        let mut size = self.sz;
+        let mut size = self.memory_allocated;
 
         if num_bytes > 0 {
             size = uvmalloc(
@@ -245,7 +241,7 @@ impl Process {
             size = uvmdealloc(self.pagetable, size, size.wrapping_add(num_bytes as u64));
         }
 
-        self.sz = size;
+        self.memory_allocated = size;
         Ok(())
     }
 
@@ -304,12 +300,12 @@ impl Process {
         let child = Process::alloc()?;
 
         // Copy user memory from parent to child.
-        if uvmcopy(parent.pagetable, child.pagetable, parent.sz) < 0 {
+        if uvmcopy(parent.pagetable, child.pagetable, parent.memory_allocated) < 0 {
             child.free();
             child.lock.unlock();
             return Err(ProcessError::Allocation);
         }
-        child.sz = parent.sz;
+        child.memory_allocated = parent.memory_allocated;
 
         // Copy saved user registers.
         *child.trapframe = *parent.trapframe;
@@ -318,18 +314,12 @@ impl Process {
         (*child.trapframe).a0 = 0;
 
         // Increment reference counts on open file descriptors.
-        for (i, file) in parent.ofile.iter().enumerate() {
+        for (i, file) in parent.open_files.iter().enumerate() {
             if !file.is_null() {
-                child.ofile[i] = filedup(parent.ofile[i]);
+                child.open_files[i] = filedup(parent.open_files[i]);
             }
         }
-        child.cwd = idup(parent.cwd);
-
-        safestrcpy(
-            addr_of!(child.name[0]).cast_mut().cast(),
-            addr_of!(parent.name[0]).cast_mut().cast(),
-            parent.name.len() as i32,
-        );
+        child.current_dir = idup(parent.current_dir);
 
         let pid = child.pid;
 
@@ -366,7 +356,7 @@ impl Process {
         }
 
         // Close all open files.
-        for file in self.ofile.iter_mut() {
+        for file in self.open_files.iter_mut() {
             if !file.is_null() {
                 fileclose(*file);
                 *file = null_mut();
@@ -375,9 +365,9 @@ impl Process {
 
         {
             let _operation = LogOperation::new();
-            iput(self.cwd);
+            iput(self.current_dir);
         }
-        self.cwd = null_mut();
+        self.current_dir = null_mut();
 
         {
             let _guard = wait_lock.lock();
@@ -389,7 +379,7 @@ impl Process {
             wakeup(self.parent.cast());
 
             self.lock.lock_unguarded();
-            self.xstate = status;
+            self.exit_status = status;
             self.state = ProcessState::Zombie;
         }
 
@@ -421,7 +411,7 @@ impl Process {
                             && copyout(
                                 self.pagetable,
                                 addr,
-                                addr_of_mut!(p.xstate).cast(),
+                                addr_of_mut!(p.exit_status).cast(),
                                 core::mem::size_of::<i32>() as u64,
                             ) < 0
                         {

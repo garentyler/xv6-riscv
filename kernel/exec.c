@@ -22,7 +22,7 @@ int flags2perm(int flags)
 int
 exec(char *path, char **argv)
 {
-  char *s, *last;
+  char *s;
   int i, off;
   uint64 argc, sz = 0, sp, ustack[MAXARG], stackbase;
   struct elfhdr elf;
@@ -115,11 +115,9 @@ exec(char *path, char **argv)
   p->trapframe->a1 = sp;
 
   // Save program name for debugging.
-  for(last=s=path; *s; s++)
-    if(*s == '/')
-      last = s+1;
-  safestrcpy(p->name, last, sizeof(p->name));
-    
+  for (s = path; *s; s++)
+    ;
+
   // Commit to the user image.
   oldpagetable = p->pagetable;
   p->pagetable = pagetable;
