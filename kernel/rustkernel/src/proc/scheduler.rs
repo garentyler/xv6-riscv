@@ -1,20 +1,20 @@
 use super::{
     context::Context,
     cpu::Cpu,
-    process::{Process, ProcessState},
+    process::{proc, Process, ProcessState},
 };
 use crate::{
-    arch::riscv::intr_get,
+    arch::riscv::{intr_get, intr_on},
     sync::spinlock::{Spinlock, SpinlockGuard},
 };
 use core::{
     ffi::c_void,
-    ptr::{addr_of_mut, null_mut},
+    ptr::{addr_of, addr_of_mut, null_mut},
 };
 
 extern "C" {
     pub fn wakeup(chan: *const c_void);
-    pub fn scheduler() -> !;
+    // pub fn scheduler() -> !;
     pub fn swtch(a: *mut Context, b: *mut Context);
 }
 
@@ -26,6 +26,41 @@ pub unsafe fn r#yield() {
     sched();
 }
 
+// Per-CPU process scheduler.
+// Each CPU calls scheduler() after setting itself up.
+// Scheduler never returns.  It loops, doing:
+//  - choose a process to run.
+//  - swtch to start running that process.
+//  - eventually that process transfers control
+//    via swtch back to the scheduler.
+pub unsafe fn scheduler() -> ! {
+    let cpu = Cpu::current();
+    cpu.proc = null_mut();
+
+    loop {
+        // Avoid deadlock by ensuring that devices can interrupt.
+        intr_on();
+
+        for p in &mut proc {
+            let _guard = p.lock.lock();
+            if p.state == ProcessState::Runnable {
+                // Switch to the chosen process. It's the process's job
+                // to release its lock and then reacquire it before
+                // jumping back to us.
+                p.state = ProcessState::Running;
+                cpu.proc = addr_of!(*p).cast_mut();
+
+                // Run the process.
+                swtch(addr_of_mut!(cpu.context), addr_of_mut!(p.context));
+                
+                // Process is done running for now.
+                // It should have changed its state before coming back.
+                cpu.proc = null_mut();
+            }
+        }
+    }
+}
+
 /// Switch to scheduler.  Must hold only p->lock
 /// and have changed proc->state. Saves and restores
 /// previous_interrupts_enabled because previous_interrupts_enabled is a property of this
@@ -33,8 +68,7 @@ pub unsafe fn r#yield() {
 /// be proc->previous_interrupts_enabled and proc->interrupt_disable_layers, but that would
 /// break in the few places where a lock is held but
 /// there's no process.
-#[no_mangle]
-pub unsafe extern "C" fn sched() {
+pub unsafe fn sched() {
     let p = Process::current().unwrap();
     let cpu = Cpu::current();
 

@@ -79,18 +79,13 @@ void printstr(char *s);
 void printint(int n);
 
 // proc.c
-void exit(int);
 void proc_mapstacks(pagetable_t);
 pagetable_t proc_pagetable(struct proc *);
 void proc_freepagetable(pagetable_t, uint64);
-int kill(int);
 int killed(struct proc *);
-void setkilled(struct proc *);
 struct cpu *mycpu(void);
 struct proc *myproc();
 void procinit(void);
-void scheduler(void) __attribute__((noreturn));
-void sched(void);
 void sleep_lock(void *, struct spinlock *);
 void userinit(void);
 int wait(uint64);
