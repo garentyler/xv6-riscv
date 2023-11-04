@@ -59,9 +59,9 @@ impl Syscall {
         match self {
             Syscall::Fork => Process::fork().unwrap_or(-1) as i64 as u64,
             Syscall::Exit => {
-                let mut n = 0i32;
-                argint(0, addr_of_mut!(n));
-                process::exit(n)
+                let mut status = 0i32;
+                argint(0, addr_of_mut!(status));
+                Process::current().unwrap().exit(status)
             }
             Syscall::Wait => {
                 let mut p = 0u64;

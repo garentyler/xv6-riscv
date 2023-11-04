@@ -232,7 +232,7 @@ pub unsafe extern "C" fn usertrap() {
         // System call
 
         if proc.is_killed() {
-            exit(-1);
+            proc.exit(-1);
         }
 
         // sepc points to the ecall instruction, but
@@ -259,7 +259,7 @@ pub unsafe extern "C" fn usertrap() {
     }
 
     if proc.is_killed() {
-        exit(-1);
+        proc.exit(-1);
     }
 
     // Give up the CPU if this is a timer interrupt.

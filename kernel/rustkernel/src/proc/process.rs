@@ -1,9 +1,14 @@
 #![allow(clippy::comparison_chain)]
 
-use super::{context::Context, cpu::Cpu, scheduler::wakeup, trapframe::Trapframe};
+use super::{context::Context, cpu::Cpu, scheduler::{wakeup, sched}, trapframe::Trapframe};
 use crate::{
     arch::riscv::{Pagetable, PTE_W, PTE_R, PTE_X, PGSIZE, memlayout::{TRAMPOLINE, TRAPFRAME}},
-    fs::{file::{File, Inode, filedup}, idup},
+    fs::{
+        file::{File, Inode, filedup, fileclose},
+        idup,
+        iput,
+        log::LogOperation,
+    },
     mem::{
         kalloc::{kfree, kalloc},
         memset,
@@ -11,6 +16,7 @@ use crate::{
     },
     sync::spinlock::Spinlock,
     string::safestrcpy,
+    println,
 };
 use core::{
     ffi::{c_char, c_void},
@@ -35,7 +41,7 @@ extern "C" {
     pub fn userinit();
     pub fn forkret();
     // pub fn fork() -> i32;
-    pub fn exit(status: i32) -> !;
+    // pub fn exit(status: i32) -> !;
     pub fn wait(addr: u64) -> i32;
     pub fn procdump();
     pub fn proc_mapstacks(kpgtbl: Pagetable);
@@ -299,6 +305,60 @@ impl Process {
         Ok(pid)
     }
 
+    /// Pass p's abandoned children to init.
+    /// Caller must hold wait_lock.
+    pub unsafe fn reparent(&self) {
+        for p in proc.iter_mut() {
+            if p.parent == addr_of!(*self).cast_mut() {
+                p.parent = initproc;
+                wakeup(initproc.cast());
+            }
+        }
+    }
+
+    /// Exit the current process. Does not return.
+    /// An exited process remains in the zombie state
+    /// until its parent calls wait().
+    pub unsafe fn exit(&mut self, status: i32) -> ! {
+        if addr_of_mut!(*self) == initproc {
+            panic!("init exiting");
+        }
+
+        // Close all open files.
+        for file in self.ofile.iter_mut() {
+            if !file.is_null() {
+                fileclose(*file);
+                *file = null_mut();
+            }
+        }
+
+        {
+            let _operation = LogOperation::new();
+            iput(self.cwd);
+        }
+        self.cwd = null_mut();
+
+        {
+            let _guard = wait_lock.lock();
+
+            // Give any children to init.
+            self.reparent();
+
+            // Parent might be sleeping in wait().
+            wakeup(self.parent.cast());
+
+            self.lock.lock_unguarded();
+            self.xstate = status;
+            self.state = ProcessState::Zombie;
+        }
+
+        // Jump into the scheduler, never to return.
+        sched();
+        loop {
+            unreachable!();
+        }
+    }
+
     /// Kill the process with the given pid.
     /// Returns true if the process was killed.
     /// The victim won't exit until it tries to return
@@ -376,16 +436,14 @@ pub unsafe extern "C" fn proc_freepagetable(pagetable: Pagetable, size: u64) {
     Process::free_pagetable(pagetable, size as usize)
 }
 
-/// Pass p's abandoned children to init.
-/// Caller must hold wait_lock.
 #[no_mangle]
 pub unsafe extern "C" fn reparent(p: *mut Process) {
-    for pp in proc.iter_mut().map(|p: &mut Process| addr_of_mut!(*p)) {
-        if (*pp).parent == p {
-            (*pp).parent = initproc;
-            wakeup(initproc.cast());
-        }
-    }
+    (*p).reparent()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn exit(status: i32) -> ! {
+    Process::current().unwrap().exit(status)
 }
 
 /// Kill the process with the given pid.
