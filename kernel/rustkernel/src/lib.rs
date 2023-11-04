@@ -24,7 +24,7 @@ mod trap;
 use crate::{proc::cpu::Cpu, sync::mutex::Mutex};
 use core::ffi::{c_char, CStr};
 
-pub(crate) use crate::console::printf::{print, println};
+pub(crate) use crate::console::printf::{print, println, uprint, uprintln};
 
 pub static mut STARTED: bool = false;
 pub static PANICKED: Mutex<bool> = Mutex::new(false);

@@ -23,8 +23,8 @@ use crate::{
             copyout, mappages, uvmalloc, uvmcopy, uvmcreate, uvmdealloc, uvmfree, uvmunmap,
         },
     },
-    string::safestrcpy,
     sync::spinlock::Spinlock,
+    uprintln,
 };
 use core::{
     ffi::{c_char, c_void},
@@ -51,7 +51,7 @@ extern "C" {
     // pub fn fork() -> i32;
     // pub fn exit(status: i32) -> !;
     pub fn wait(addr: u64) -> i32;
-    pub fn procdump();
+    // pub fn procdump();
     pub fn proc_mapstacks(kpgtbl: Pagetable);
 }
 
@@ -503,4 +503,16 @@ pub unsafe extern "C" fn proc_pagetable(p: *mut Process) -> Pagetable {
 #[no_mangle]
 pub unsafe extern "C" fn proc_freepagetable(pagetable: Pagetable, size: u64) {
     Process::free_pagetable(pagetable, size as usize)
+}
+
+/// Print a process listing to console for debugging.
+/// Runs when a user types ^P on console.
+/// No lock to avoid wedging a stuck machine further.
+pub unsafe fn procdump() {
+    uprintln!("\nprocdump:");
+    for p in &proc {
+        if p.state != ProcessState::Unused {
+            uprintln!("    {}: {:?}", p.pid, p.state);
+        }
+    }
 }

@@ -5,7 +5,7 @@ pub use crate::panic;
 
 pub static PRINT_LOCK: Lock = Lock::new();
 
-/// Print out formatted text to the UART.
+/// Print out formatted text to the console.
 /// Spins to acquire the lock.
 macro_rules! print {
     ($($arg:tt)*) => {{
@@ -27,6 +27,34 @@ macro_rules! println {
     }};
 }
 pub(crate) use println;
+
+/// Print out formatted text to the UART.
+/// Does not use any locks.
+macro_rules! uprint {
+    ($($arg:tt)*) => {{
+        use $crate::console::uart::Uart;
+        use core::fmt::Write;
+
+        // Do some casts to get a mutable reference.
+        // Safe because Uart's core::fmt::Write implementation
+        // only uses the &mut reference immutably.
+        let uart: *const Uart = &$crate::console::uart::UART0 as *const Uart;
+        let uart: &mut Uart = unsafe { &mut *uart.cast_mut() };
+        
+        let _ = core::write!(uart, $($arg)*);
+    }};
+}
+pub(crate) use uprint;
+
+macro_rules! uprintln {
+    ($($arg:tt)*) => {{
+        use $crate::console::printf::uprint;
+        uprint!($($arg)*);
+        uprint!("\n");
+    }};
+}
+pub(crate) use uprintln;
+
 
 #[no_mangle]
 pub extern "C" fn printint(n: i32) {
