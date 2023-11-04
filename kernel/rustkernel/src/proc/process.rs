@@ -2,14 +2,18 @@
 
 use super::{context::Context, cpu::Cpu, scheduler::wakeup, trapframe::Trapframe};
 use crate::{
-    arch::riscv::{Pagetable, PTE_W, PGSIZE},
+    arch::riscv::{Pagetable, PTE_W, PTE_R, PTE_X, PGSIZE, memlayout::{TRAMPOLINE, TRAPFRAME}},
     fs::file::{File, Inode},
-    mem::{kalloc::{kfree, kalloc}, memset},
+    mem::{
+        kalloc::{kfree, kalloc},
+        memset,
+        virtual_memory::{uvmcreate, uvmfree, uvmunmap, mappages},
+    },
     sync::spinlock::Spinlock,
 };
 use core::{
     ffi::{c_char, c_void},
-    ptr::{addr_of_mut, null_mut},
+    ptr::{addr_of, addr_of_mut, null_mut},
     sync::atomic::{AtomicI32, Ordering},
 };
 
@@ -34,8 +38,8 @@ extern "C" {
     pub fn wait(addr: u64) -> i32;
     pub fn procdump();
     pub fn proc_mapstacks(kpgtbl: Pagetable);
-    pub fn proc_pagetable(p: *mut Process) -> Pagetable;
-    pub fn proc_freepagetable(pagetable: Pagetable, sz: u64);
+    // pub fn proc_pagetable(p: *mut Process) -> Pagetable;
+    // pub fn proc_freepagetable(pagetable: Pagetable, sz: u64);
     // pub fn allocproc() -> *mut Process;
     pub fn uvmalloc(pagetable: Pagetable, oldsz: u64, newsz: u64, xperm: i32) -> u64;
     pub fn uvmdealloc(pagetable: Pagetable, oldsz: u64, newsz: u64) -> u64;
@@ -220,6 +224,40 @@ impl Process {
         Ok(())
     }
 
+    /// Create a user page table for a given process,
+    /// with no user memory, but with trampoline and trapframe pages.
+    pub unsafe fn alloc_pagetable(&mut self) -> Result<Pagetable, ProcessError> {
+        // Create an empty page table.
+        let pagetable: Pagetable = uvmcreate();
+        if pagetable.is_null() {
+            return Err(ProcessError::Allocation);
+        }
+        
+        // Map the trampoline code (for syscall return)
+        // at the highest user virtual address.
+        // Only the supervisor uses it on the way
+        // to and from user space, so not PTE_U.
+        if mappages(pagetable, TRAMPOLINE, PGSIZE, addr_of!(trampoline) as usize as u64, PTE_R | PTE_X) < 0 {
+            uvmfree(pagetable, 0);
+            return Err(ProcessError::Allocation);
+        }
+
+        // Map the trapframe page just below the trampoline page for trampoline.S.
+        if mappages(pagetable, TRAPFRAME, PGSIZE, self.trapframe as usize as u64, PTE_R | PTE_W) < 0 {
+            uvmunmap(pagetable, TRAMPOLINE, 1, 0);
+            uvmfree(pagetable, 0);
+            return Err(ProcessError::Allocation);
+        }
+        
+        Ok(pagetable)
+    }
+    /// Free a process's pagetable and free the physical memory it refers to.
+    pub unsafe fn free_pagetable(pagetable: Pagetable, size: usize) {
+        uvmunmap(pagetable, TRAMPOLINE, 1, 0);
+        uvmunmap(pagetable, TRAPFRAME, 1, 0);
+        uvmfree(pagetable, size as u64)
+    }
+
     /// Kill the process with the given pid.
     /// Returns true if the process was killed.
     /// The victim won't exit until it tries to return
@@ -285,6 +323,16 @@ pub unsafe extern "C" fn allocproc() -> *mut Process {
 #[no_mangle]
 pub unsafe extern "C" fn freeproc(p: *mut Process) {
     (*p).free();
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn proc_pagetable(p: *mut Process) -> Pagetable {
+    (*p).alloc_pagetable().unwrap_or(null_mut())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn proc_freepagetable(pagetable: Pagetable, size: u64) {
+    Process::free_pagetable(pagetable, size as usize)
 }
 
 /// Pass p's abandoned children to init.
