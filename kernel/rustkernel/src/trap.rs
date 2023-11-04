@@ -90,14 +90,14 @@ impl InterruptBlocker {
     pub fn new() -> InterruptBlocker {
         unsafe {
             let interrupts_before = intr_get();
-            let cpu = Cpu::current_raw();
+            let cpu = Cpu::current();
 
             intr_off();
 
-            if (*cpu).interrupt_disable_layers == 0 {
-                (*cpu).previous_interrupts_enabled = interrupts_before;
+            if cpu.interrupt_disable_layers == 0 {
+                cpu.previous_interrupts_enabled = interrupts_before;
             }
-            (*cpu).interrupt_disable_layers += 1;
+            cpu.interrupt_disable_layers += 1;
             // crate::sync::spinlock::push_off();
         }
         InterruptBlocker
@@ -106,16 +106,16 @@ impl InterruptBlocker {
 impl core::ops::Drop for InterruptBlocker {
     fn drop(&mut self) {
         unsafe {
-            let cpu = Cpu::current_raw();
+            let cpu = Cpu::current();
 
-            if intr_get() == 1 || (*cpu).interrupt_disable_layers < 1 {
+            if intr_get() == 1 || cpu.interrupt_disable_layers < 1 {
                 // panic!("pop_off mismatched");
                 return;
             }
 
-            (*cpu).interrupt_disable_layers -= 1;
+            cpu.interrupt_disable_layers -= 1;
 
-            if (*cpu).interrupt_disable_layers == 0 && (*cpu).previous_interrupts_enabled == 1 {
+            if cpu.interrupt_disable_layers == 0 && cpu.previous_interrupts_enabled == 1 {
                 intr_on();
             }
             // crate::sync::spinlock::pop_off();
@@ -272,28 +272,28 @@ pub unsafe extern "C" fn usertrap() {
 
 pub unsafe fn push_intr_off() {
     let old = intr_get();
-    let cpu = Cpu::current_raw();
+    let cpu = Cpu::current();
 
     intr_off();
-    if (*cpu).interrupt_disable_layers == 0 {
-        (*cpu).previous_interrupts_enabled = old;
+    if cpu.interrupt_disable_layers == 0 {
+        cpu.previous_interrupts_enabled = old;
     }
-    (*cpu).interrupt_disable_layers += 1;
+    cpu.interrupt_disable_layers += 1;
 }
 pub unsafe fn pop_intr_off() {
-    let cpu = Cpu::current_raw();
+    let cpu = Cpu::current();
 
     if intr_get() == 1 {
         // crate::panic_byte(b'0');
         panic!("pop_intr_off - interruptible");
-    } else if (*cpu).interrupt_disable_layers < 1 {
+    } else if cpu.interrupt_disable_layers < 1 {
         // crate::panic_byte(b'1');
         panic!("pop_intr_off");
     }
 
-    (*cpu).interrupt_disable_layers -= 1;
+    cpu.interrupt_disable_layers -= 1;
 
-    if (*cpu).interrupt_disable_layers == 0 && (*cpu).previous_interrupts_enabled == 1 {
+    if cpu.interrupt_disable_layers == 0 && cpu.previous_interrupts_enabled == 1 {
         intr_on();
     }
 }

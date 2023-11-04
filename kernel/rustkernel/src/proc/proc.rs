@@ -101,8 +101,7 @@ pub struct Proc {
 #[no_mangle]
 pub unsafe extern "C" fn myproc() -> *mut Proc {
     let _ = crate::trap::InterruptBlocker::new();
-    let c = Cpu::current_raw();
-    (*c).proc
+    Cpu::current().proc
 }
 
 #[no_mangle]
@@ -183,9 +182,9 @@ pub unsafe fn r#yield() {
 #[no_mangle]
 pub unsafe extern "C" fn sched() {
     let p = myproc();
-    let c = Cpu::current_raw();
+    let cpu = Cpu::current();
 
-    if (*c).interrupt_disable_layers != 1 {
+    if cpu.interrupt_disable_layers != 1 {
         panic!("sched locks");
     } else if (*p).state == ProcState::Running {
         panic!("sched running");
@@ -193,9 +192,9 @@ pub unsafe extern "C" fn sched() {
         panic!("sched interruptible");
     }
 
-    let previous_interrupts_enabled = (*c).previous_interrupts_enabled;
-    swtch(addr_of_mut!((*p).context), addr_of_mut!((*c).context));
-    (*c).previous_interrupts_enabled = previous_interrupts_enabled;
+    let previous_interrupts_enabled = cpu.previous_interrupts_enabled;
+    swtch(addr_of_mut!((*p).context), addr_of_mut!(cpu.context));
+    cpu.previous_interrupts_enabled = previous_interrupts_enabled;
 }
 
 /// The lock should already be locked.

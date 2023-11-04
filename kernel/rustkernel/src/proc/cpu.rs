@@ -34,12 +34,7 @@ impl Cpu {
     /// Return this CPU's cpu struct.
     /// Interrupts must be disabled.
     pub fn current() -> &'static mut Cpu {
-        unsafe { &mut *Cpu::current_raw() }
-    }
-    /// Return this CPU's cpu struct.
-    /// Interrupts must be disabled.
-    pub unsafe fn current_raw() -> *mut Cpu {
-        addr_of_mut!(CPUS[Cpu::current_id()])
+        unsafe { &mut CPUS[Cpu::current_id()] }
     }
 }
 
@@ -47,5 +42,5 @@ impl Cpu {
 /// Interrupts must be disabled.
 #[no_mangle]
 pub unsafe extern "C" fn mycpu() -> *mut Cpu {
-    Cpu::current_raw()
+    addr_of_mut!(*Cpu::current())
 }
