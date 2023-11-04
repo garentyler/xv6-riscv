@@ -44,7 +44,7 @@ extern "C" {
 pub static NEXT_PID: AtomicI32 = AtomicI32::new(1);
 
 #[repr(C)]
-#[derive(PartialEq, Default)]
+#[derive(Copy, Clone, Debug, Default, PartialEq)]
 pub enum ProcessState {
     #[default]
     Unused,
@@ -53,6 +53,11 @@ pub enum ProcessState {
     Runnable,
     Running,
     Zombie,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum ProcessError {
+    Allocation,
 }
 
 /// Per-process state.
@@ -124,6 +129,10 @@ impl Process {
         }
     }
 
+    pub fn alloc_pid() -> i32 {
+        NEXT_PID.fetch_add(1, Ordering::SeqCst)
+    }
+
     /// Free a proc structure and the data hanging from it, including user pages.
     /// self.lock must be held.
     pub unsafe fn free(&mut self) {
@@ -143,6 +152,24 @@ impl Process {
         self.killed = 0;
         self.xstate = 0;
         self.state = ProcessState::Unused;
+    }
+
+    /// Grow or shrink user memory.
+    pub unsafe fn grow_memory(&mut self, num_bytes: i32) -> Result<(), ProcessError> {
+        let mut size = self.sz;
+
+        if num_bytes > 0 {
+            size = uvmalloc(self.pagetable, size, size.wrapping_add(num_bytes as u64), PTE_W);
+
+            if size == 0 {
+                return Err(ProcessError::Allocation);
+            }
+        } else if num_bytes < 0 {
+            size = uvmdealloc(self.pagetable, size, size.wrapping_add(num_bytes as u64));
+        }
+
+        self.sz = size;
+        Ok(())
     }
 
     /// Kill the process with the given pid.
@@ -193,7 +220,7 @@ pub extern "C" fn myproc() -> *mut Process {
 
 #[no_mangle]
 pub extern "C" fn allocpid() -> i32 {
-    NEXT_PID.fetch_add(1, Ordering::SeqCst)
+    Process::alloc_pid()
 }
 
 /// Free a proc structure and the data hanging from it, including user pages.
@@ -213,24 +240,6 @@ pub unsafe extern "C" fn reparent(p: *mut Process) {
             wakeup(initproc.cast());
         }
     }
-}
-
-/// Grow or shrink user memory by n bytes.
-/// Return 0 on success, -1 on failure.
-pub unsafe fn growproc(n: i32) -> i32 {
-    let p = Process::current().unwrap();
-    let mut sz = p.sz;
-
-    if n > 0 {
-        sz = uvmalloc(p.pagetable, sz, sz.wrapping_add(n as u64), PTE_W);
-        if sz == 0 {
-            return -1;
-        }
-    } else if n < 0 {
-        sz = uvmdealloc(p.pagetable, sz, sz.wrapping_add(n as u64));
-    }
-    p.sz = sz;
-    0
 }
 
 /// Kill the process with the given pid.

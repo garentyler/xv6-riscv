@@ -142,12 +142,13 @@ impl Syscall {
             Syscall::Sbrk => {
                 let mut n = 0i32;
                 argint(0, addr_of_mut!(n));
-                let addr = Process::current().unwrap().sz;
+                let proc = Process::current().unwrap();
+                let addr = proc.sz;
 
-                if process::growproc(n) < 0 {
-                    -1i64 as u64
-                } else {
+                if unsafe { proc.grow_memory(n).is_ok() } {
                     addr
+                } else {
+                    -1i64 as u64
                 }
             }
             Syscall::Sleep => {
