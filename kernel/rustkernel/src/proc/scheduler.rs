@@ -13,7 +13,7 @@ use core::{
 };
 
 extern "C" {
-    pub fn wakeup(chan: *const c_void);
+    // pub fn wakeup(chan: *const c_void);
     // pub fn scheduler() -> !;
     pub fn swtch(a: *mut Context, b: *mut Context);
 }
@@ -108,4 +108,18 @@ pub unsafe fn sleep(chan: *mut c_void) {
 
     // Tidy up.
     p.chan = null_mut();
+}
+
+/// Wake up all processes sleeping on chan.
+/// Must be called without any p.lock.
+#[no_mangle]
+pub unsafe extern "C" fn wakeup(chan: *mut c_void) {
+    for p in &mut proc {
+        if !p.is_current() {
+            let _guard = p.lock.lock();
+            if p.state == ProcessState::Sleeping && p.chan == chan {
+                p.state = ProcessState::Runnable;
+            }
+        }
+    }
 }

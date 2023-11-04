@@ -146,6 +146,9 @@ impl Process {
             unsafe { Some(&mut *p) }
         }
     }
+    pub fn is_current(&self) -> bool {
+        addr_of!(*self).cast_mut() == Cpu::current().proc
+    }
 
     pub fn alloc_pid() -> i32 {
         NEXT_PID.fetch_add(1, Ordering::SeqCst)
