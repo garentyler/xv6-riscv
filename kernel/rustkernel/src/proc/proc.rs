@@ -128,6 +128,28 @@ impl Proc {
             unsafe { Some(&mut *p) }
         }
     }
+
+    /// Free a proc structure and the data hanging from it, including user pages.
+    /// self.lock must be held.
+    pub unsafe fn free(&mut self) {
+        if !self.trapframe.is_null() {
+            kfree(self.trapframe.cast());
+        }
+        self.trapframe = null_mut();
+        if !self.pagetable.is_null() {
+            proc_freepagetable(self.pagetable, self.sz);
+        }
+        self.pagetable = null_mut();
+        self.sz = 0;
+        self.pid = 0;
+        self.parent = null_mut();
+        self.name[0] = 0;
+        self.chan = null_mut();
+        self.killed = 0;
+        self.xstate = 0;
+        self.state = ProcState::Unused;
+    }
+
     /// Kill the process with the given pid.
     /// Returns true if the process was killed.
     /// The victim won't exit until it tries to return
@@ -150,7 +172,6 @@ impl Proc {
 
         false
     }
-
     pub fn is_killed(&self) -> bool {
         let _guard = self.lock.lock();
         self.killed > 0
@@ -184,22 +205,7 @@ pub extern "C" fn allocpid() -> i32 {
 /// p->lock must be held.
 #[no_mangle]
 pub unsafe extern "C" fn freeproc(p: *mut Proc) {
-    if !(*p).trapframe.is_null() {
-        kfree((*p).trapframe.cast());
-    }
-    (*p).trapframe = null_mut();
-    if !(*p).pagetable.is_null() {
-        proc_freepagetable((*p).pagetable, (*p).sz);
-    }
-    (*p).pagetable = null_mut();
-    (*p).sz = 0;
-    (*p).pid = 0;
-    (*p).parent = null_mut();
-    (*p).name[0] = 0;
-    (*p).chan = null_mut();
-    (*p).killed = 0;
-    (*p).xstate = 0;
-    (*p).state = ProcState::Unused;
+    (*p).free();
 }
 
 /// Pass p's abandoned children to init.
