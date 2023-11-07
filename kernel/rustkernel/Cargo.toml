@@ -2,6 +2,10 @@
 name = "rustkernel"
 version = "0.1.0"
 edition = "2021"
+authors = ["Garen Tyler <garentyler@garen.dev>"]
+repository = "https://github.com/garentyler/xv6-riscv"
+readme = "../../README.md"
+license = "LGPL-3.0-only"
 
 [dependencies]
 
