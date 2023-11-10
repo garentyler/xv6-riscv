@@ -1,5 +1,4 @@
 use super::{context::Context, process::Process};
-use crate::arch::riscv::asm::r_tp;
 use core::ptr::{addr_of_mut, null_mut};
 
 pub static mut CPUS: [Cpu; crate::NCPU] = [Cpu::new(); crate::NCPU];
@@ -29,7 +28,7 @@ impl Cpu {
     /// to prevent race with process being moved
     /// to a different CPU.
     pub fn current_id() -> usize {
-        unsafe { r_tp() as usize }
+        crate::arch::cpu::cpu_id()
     }
     /// Return this CPU's cpu struct.
     /// Interrupts must be disabled.

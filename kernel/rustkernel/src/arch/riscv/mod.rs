@@ -1,5 +1,6 @@
 pub mod asm;
 pub mod clint;
+pub mod cpu;
 pub mod memlayout;
 pub mod plic;
 pub mod power;
