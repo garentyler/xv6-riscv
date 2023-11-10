@@ -55,7 +55,7 @@ pub unsafe fn devintr() -> i32 {
 
         // IRQ indicates which device interrupted.
         let irq = interrupt::handle_interrupt();
-       
+
         let mut uart_interrupt = false;
         for (uart_irq, uart) in &crate::hardware::UARTS {
             if irq == *uart_irq {
@@ -63,7 +63,7 @@ pub unsafe fn devintr() -> i32 {
                 uart.interrupt();
             }
         }
-        
+
         if !uart_interrupt {
             if irq == VIRTIO0_IRQ {
                 virtio_disk_intr();

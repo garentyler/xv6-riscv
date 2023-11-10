@@ -68,7 +68,6 @@ pub unsafe fn main() -> ! {
         arch::interrupt::inithart();
         io::bio::binit();
         fs::iinit();
-        fs::file::fileinit();
         hardware::virtio_disk::virtio_disk_init();
         proc::process::userinit();
         STARTED = true;

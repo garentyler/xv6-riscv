@@ -5,7 +5,7 @@ use crate::{
     fs::{log, stat::Stat},
     io::pipe::Pipe,
     proc::process::Process,
-    sync::{sleeplock::Sleeplock, spinlock::Spinlock},
+    sync::{mutex::Mutex, sleeplock::Sleeplock, spinlock::Spinlock},
 };
 use core::ptr::{addr_of_mut, null_mut};
 
@@ -36,8 +36,9 @@ pub struct File {
     /// FileType::Device
     pub major: i16,
 }
+unsafe impl Send for File {}
 impl File {
-    pub const unsafe fn uninitialized() -> File {
+    pub const fn uninitialized() -> File {
         File {
             kind: FileType::None,
             references: 0,
@@ -121,33 +122,15 @@ pub struct FileTable {
 
 #[no_mangle]
 pub static mut devsw: [Devsw; crate::NDEV] = [Devsw::new(); crate::NDEV];
-#[no_mangle]
-pub static mut ftable: FileTable = FileTable {
-    lock: Spinlock::new(),
-    files: unsafe { [File::uninitialized(); crate::NFILE] },
-};
+pub static FILES: Mutex<[File; crate::NFILE]> = Mutex::new([File::uninitialized(); crate::NFILE]);
 pub const CONSOLE: usize = 1;
-
-extern "C" {
-    // pub fn fileinit();
-    // pub fn filealloc() -> *mut File;
-    // pub fn filedup(file: *mut File) -> *mut File;
-    // pub fn fileclose(file: *mut File);
-    // pub fn filestat(file: *mut File, addr: u64) -> i32;
-    // pub fn fileread(file: *mut File, addr: u64, n: i32) -> i32;
-    // pub fn filewrite(file: *mut File, addr: u64, n: i32) -> i32;
-}
-
-pub unsafe fn fileinit() {
-    ftable.lock = Spinlock::new();
-}
 
 /// Allocate a file structure.
 #[no_mangle]
 pub unsafe extern "C" fn filealloc() -> *mut File {
-    let _guard = ftable.lock.lock();
+    let mut files = FILES.lock_spinning();
 
-    for file in &mut ftable.files {
+    for file in files.as_mut() {
         if file.references == 0 {
             file.references = 1;
             return addr_of_mut!(*file);
@@ -158,9 +141,8 @@ pub unsafe extern "C" fn filealloc() -> *mut File {
 }
 
 /// Increment reference count for file `file`.
-#[no_mangle]
-pub unsafe extern "C" fn filedup(file: *mut File) -> *mut File {
-    let _guard = ftable.lock.lock();
+pub unsafe fn filedup(file: *mut File) -> *mut File {
+    let _guard = FILES.lock_spinning();
 
     if (*file).references < 1 {
         panic!("filedup");
@@ -176,7 +158,7 @@ pub unsafe extern "C" fn filedup(file: *mut File) -> *mut File {
 /// Decrement reference count, and close when reaching 0.
 #[no_mangle]
 pub unsafe extern "C" fn fileclose(file: *mut File) {
-    let guard = ftable.lock.lock();
+    let guard = FILES.lock_spinning();
 
     if (*file).references < 1 {
         panic!("fileclose");
@@ -204,8 +186,7 @@ pub unsafe extern "C" fn fileclose(file: *mut File) {
 /// Get metadata about file `file`.
 ///
 /// `addr` is a user virtual address, pointing to a Stat.
-#[no_mangle]
-pub unsafe extern "C" fn filestat(file: *mut File, addr: u64) -> i32 {
+pub unsafe fn filestat(file: *mut File, addr: u64) -> i32 {
     let proc = Process::current().unwrap();
     let mut stat = Stat::default();
 
@@ -234,8 +215,7 @@ pub unsafe extern "C" fn filestat(file: *mut File, addr: u64) -> i32 {
 /// Read from file `file`.
 ///
 /// `addr` is a user virtual address.
-#[no_mangle]
-pub unsafe extern "C" fn fileread(file: *mut File, addr: u64, num_bytes: i32) -> i32 {
+pub unsafe fn fileread(file: *mut File, addr: u64, num_bytes: i32) -> i32 {
     if (*file).readable == 0 {
         return -1;
     }
@@ -270,8 +250,7 @@ pub unsafe extern "C" fn fileread(file: *mut File, addr: u64, num_bytes: i32) ->
 /// Write to file `file`.
 ///
 /// `addr` is as user virtual address.
-#[no_mangle]
-pub unsafe extern "C" fn filewrite(file: *mut File, addr: u64, num_bytes: i32) -> i32 {
+pub unsafe fn filewrite(file: *mut File, addr: u64, num_bytes: i32) -> i32 {
     if (*file).writable == 0 {
         return -1;
     }

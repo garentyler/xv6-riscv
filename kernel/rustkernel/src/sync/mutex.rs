@@ -42,7 +42,10 @@ impl<T> Mutex<T> {
     }
 }
 unsafe impl<T> Sync for Mutex<T> where T: Send {}
-impl<T> Clone for Mutex<T> where T: Clone {
+impl<T> Clone for Mutex<T>
+where
+    T: Clone,
+{
     fn clone(&self) -> Self {
         let value: T = self.lock_spinning().as_ref().clone();
         Mutex::new(value)

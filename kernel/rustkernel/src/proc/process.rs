@@ -80,6 +80,7 @@ pub enum ProcessError {
 
 /// Per-process state.
 #[repr(C)]
+#[derive(Clone)]
 pub struct Process {
     pub lock: Spinlock,
 
