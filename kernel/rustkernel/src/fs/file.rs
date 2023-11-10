@@ -1,9 +1,9 @@
 //! Support functions for system calls that involve file descriptors.
 
 use crate::{
+    arch::virtual_memory::copyout,
     fs::{log, stat::Stat},
     io::pipe::Pipe,
-    arch::virtual_memory::copyout,
     proc::process::Process,
     sync::{sleeplock::Sleeplock, spinlock::Spinlock},
 };

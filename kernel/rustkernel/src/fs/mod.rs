@@ -3,9 +3,7 @@
 
 pub mod file;
 pub mod log;
-pub mod ramdisk;
 pub mod stat;
-pub mod virtio_disk;
 
 use crate::fs::file::Inode;
 

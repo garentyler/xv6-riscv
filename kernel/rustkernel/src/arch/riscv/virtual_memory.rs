@@ -1,4 +1,9 @@
-use super::{asm, mem::{make_satp, pte2pa}, plic::PLIC, power::QEMU_POWER};
+use super::{
+    asm,
+    mem::{make_satp, pte2pa},
+    plic::PLIC,
+    power::QEMU_POWER,
+};
 use crate::{
     arch::{
         self,

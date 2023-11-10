@@ -1,7 +1,7 @@
 use crate::{
+    arch::virtual_memory::{copyin, copyout},
     fs::file::{filealloc, fileclose, File, FileType},
     mem::kalloc::{kalloc, kfree},
-    arch::virtual_memory::{copyin, copyout},
     proc::{process::Process, scheduler::wakeup},
     sync::spinlock::Spinlock,
 };

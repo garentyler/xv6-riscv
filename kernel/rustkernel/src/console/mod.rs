@@ -9,10 +9,10 @@
 // - ctrl-p: print process list
 
 pub mod printf;
-pub mod uart;
 
 use crate::{
     fs::file::{devsw, CONSOLE},
+    hardware::uart::UART0,
     proc::{
         process::{procdump, Process},
         scheduler::wakeup,
@@ -20,7 +20,6 @@ use crate::{
     sync::mutex::Mutex,
 };
 use core::{ffi::c_void, ptr::addr_of_mut};
-use uart::UART0;
 
 extern "C" {
     fn either_copyin(dst: *mut c_void, user_src: i32, src: u64, len: u64) -> i32;

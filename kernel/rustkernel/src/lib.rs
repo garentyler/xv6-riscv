@@ -11,6 +11,7 @@ extern crate core;
 mod arch;
 mod console;
 mod fs;
+mod hardware;
 mod io;
 mod mem;
 mod proc;
@@ -68,7 +69,7 @@ pub unsafe fn main() -> ! {
         io::bio::binit();
         fs::iinit();
         fs::file::fileinit();
-        fs::virtio_disk::virtio_disk_init();
+        hardware::virtio_disk::virtio_disk_init();
         proc::process::userinit();
         STARTED = true;
     } else {

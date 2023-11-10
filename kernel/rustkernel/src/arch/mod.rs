@@ -45,7 +45,10 @@ pub mod mem {
 
 pub mod virtual_memory {
     #[cfg(target_arch = "riscv64")]
-    pub use super::riscv::virtual_memory::{kvminit as init, kvminithart as inithart, copyin, copyinstr, copyout, mappages, uvmalloc, uvmcopy, uvmcreate, uvmdealloc, uvmfree, uvmunmap};
+    pub use super::riscv::virtual_memory::{
+        copyin, copyinstr, copyout, kvminit as init, kvminithart as inithart, mappages, uvmalloc,
+        uvmcopy, uvmcreate, uvmdealloc, uvmfree, uvmunmap,
+    };
 }
 
 pub mod power {

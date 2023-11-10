@@ -1,5 +1,9 @@
 use crate::{
-    arch::{clock::CLOCK_TICKS, power::shutdown, virtual_memory::{copyin, copyinstr}},
+    arch::{
+        clock::CLOCK_TICKS,
+        power::shutdown,
+        virtual_memory::{copyin, copyinstr},
+    },
     fs::{
         self,
         file::{self, File},

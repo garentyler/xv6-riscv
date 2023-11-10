@@ -57,7 +57,7 @@ pub unsafe fn devintr() -> i32 {
         let irq = interrupt::handle_interrupt();
 
         if irq == UART0_IRQ {
-            crate::console::uart::UART0.interrupt();
+            crate::hardware::uart::UART0.interrupt();
         } else if irq == VIRTIO0_IRQ {
             virtio_disk_intr();
         } else if irq > 0 {
