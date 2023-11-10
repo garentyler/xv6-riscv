@@ -36,7 +36,7 @@ macro_rules! uprint {
         // Do some casts to get a mutable reference.
         // Safe because Uart's core::fmt::Write implementation
         // only uses the &mut reference immutably.
-        let uart: *const Uart = &$crate::hardware::uart::UART0 as *const Uart;
+        let uart: *const Uart = &$crate::hardware::UARTS[0].1 as *const Uart;
         let uart: &mut Uart = unsafe { &mut *uart.cast_mut() };
 
         let _ = core::write!(uart, $($arg)*);

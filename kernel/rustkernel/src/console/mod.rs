@@ -12,12 +12,12 @@ pub mod printf;
 
 use crate::{
     fs::file::{devsw, CONSOLE},
-    hardware::uart::UART0,
     proc::{
         process::{procdump, Process},
         scheduler::wakeup,
     },
     sync::mutex::Mutex,
+    hardware::uart::Uart,
 };
 use core::{ffi::c_void, ptr::addr_of_mut};
 
@@ -25,6 +25,8 @@ extern "C" {
     fn either_copyin(dst: *mut c_void, user_src: i32, src: u64, len: u64) -> i32;
     fn either_copyout(user_dst: i32, dst: u64, src: *mut c_void, len: u64) -> i32;
 }
+
+pub static UART0: &'static Uart = &crate::hardware::UARTS[0].1;
 
 pub const BACKSPACE: u8 = 0x00;
 pub const INPUT_BUF_SIZE: usize = 128;

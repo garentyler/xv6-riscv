@@ -7,7 +7,7 @@ use super::{
 use crate::{
     arch::{
         self,
-        hardware::{UART0, VIRTIO0},
+        hardware::VIRTIO0,
         mem::{
             round_down_page, round_up_page, Pagetable, PagetableEntry, KERNEL_BASE, PAGE_SIZE,
             PHYSICAL_END, PTE_R, PTE_U, PTE_V, PTE_W, PTE_X, TRAMPOLINE, VIRTUAL_MAX,
@@ -46,13 +46,15 @@ pub unsafe fn kvmmake() -> Pagetable {
     );
 
     // UART registers
-    kvmmap(
-        pagetable,
-        UART0 as u64,
-        UART0 as u64,
-        PAGE_SIZE as u64,
-        PTE_R | PTE_W,
-    );
+    for (_, uart) in &crate::hardware::UARTS {
+        kvmmap(
+            pagetable,
+            uart.base_address as u64,
+            uart.base_address as u64,
+            PAGE_SIZE as u64,
+            PTE_R | PTE_W,
+        );
+    }
 
     // VirtIO MMIO disk interface
     kvmmap(

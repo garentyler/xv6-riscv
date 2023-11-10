@@ -1,7 +1,7 @@
 use super::{asm, mem::make_satp, SSTATUS_SPIE, SSTATUS_SPP};
 use crate::{
     arch::{
-        hardware::{UART0_IRQ, VIRTIO0_IRQ},
+        hardware::VIRTIO0_IRQ,
         interrupt,
         mem::{PAGE_SIZE, TRAMPOLINE},
     },
@@ -55,13 +55,21 @@ pub unsafe fn devintr() -> i32 {
 
         // IRQ indicates which device interrupted.
         let irq = interrupt::handle_interrupt();
-
-        if irq == UART0_IRQ {
-            crate::hardware::uart::UART0.interrupt();
-        } else if irq == VIRTIO0_IRQ {
-            virtio_disk_intr();
-        } else if irq > 0 {
-            println!("unexpected interrupt irq={}", irq);
+       
+        let mut uart_interrupt = false;
+        for (uart_irq, uart) in &crate::hardware::UARTS {
+            if irq == *uart_irq {
+                uart_interrupt = true;
+                uart.interrupt();
+            }
+        }
+        
+        if !uart_interrupt {
+            if irq == VIRTIO0_IRQ {
+                virtio_disk_intr();
+            } else if irq > 0 {
+                println!("unexpected interrupt irq={}", irq);
+            }
         }
 
         // The PLIC allows each device to raise at most one
