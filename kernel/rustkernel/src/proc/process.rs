@@ -7,9 +7,9 @@ use super::{
     trapframe::Trapframe,
 };
 use crate::{
-    arch::riscv::{
-        memlayout::{TRAMPOLINE, TRAPFRAME},
-        Pagetable, PGSIZE, PTE_R, PTE_W, PTE_X,
+    arch::{
+        mem::{Pagetable, PAGE_SIZE, TRAMPOLINE, TRAPFRAME,
+        PTE_R, PTE_W, PTE_X},
     },
     fs::{
         file::{fileclose, filedup, File, Inode},
@@ -197,7 +197,7 @@ impl Process {
             core::mem::size_of::<Context>() as u32,
         );
         p.context.ra = forkret as usize as u64;
-        p.context.sp = p.kernel_stack + PGSIZE;
+        p.context.sp = p.kernel_stack + PAGE_SIZE as u64;
 
         Ok(p)
     }
@@ -260,8 +260,8 @@ impl Process {
         // to and from user space, so not PTE_U.
         if mappages(
             pagetable,
-            TRAMPOLINE,
-            PGSIZE,
+            TRAMPOLINE as u64,
+            PAGE_SIZE as u64,
             addr_of!(trampoline) as usize as u64,
             PTE_R | PTE_X,
         ) < 0
@@ -273,13 +273,13 @@ impl Process {
         // Map the trapframe page just below the trampoline page for trampoline.S.
         if mappages(
             pagetable,
-            TRAPFRAME,
-            PGSIZE,
+            TRAPFRAME as u64,
+            PAGE_SIZE as u64,
             self.trapframe as usize as u64,
             PTE_R | PTE_W,
         ) < 0
         {
-            uvmunmap(pagetable, TRAMPOLINE, 1, 0);
+            uvmunmap(pagetable, TRAMPOLINE as u64, 1, 0);
             uvmfree(pagetable, 0);
             return Err(ProcessError::Allocation);
         }
@@ -288,8 +288,8 @@ impl Process {
     }
     /// Free a process's pagetable and free the physical memory it refers to.
     pub unsafe fn free_pagetable(pagetable: Pagetable, size: usize) {
-        uvmunmap(pagetable, TRAMPOLINE, 1, 0);
-        uvmunmap(pagetable, TRAPFRAME, 1, 0);
+        uvmunmap(pagetable, TRAMPOLINE as u64, 1, 0);
+        uvmunmap(pagetable, TRAPFRAME as u64, 1, 0);
         uvmfree(pagetable, size as u64)
     }
 

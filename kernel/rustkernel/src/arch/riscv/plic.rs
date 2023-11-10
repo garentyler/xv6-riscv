@@ -1,9 +1,7 @@
 //! The RISC-V Platform Level Interrupt Controller (PLIC)
 
-use crate::{
-    arch::riscv::{UART0_IRQ, VIRTIO0_IRQ},
-    proc::cpu::Cpu,
-};
+use super::hardware::{UART0_IRQ, VIRTIO0_IRQ};
+use crate::proc::cpu::Cpu;
 
 // QEMU puts platform-level interrupt controller (PLIC) here.
 pub const PLIC: usize = 0x0c000000;

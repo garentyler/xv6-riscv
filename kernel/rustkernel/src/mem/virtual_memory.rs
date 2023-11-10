@@ -1,11 +1,17 @@
 use crate::{
-    arch::riscv::{
-        asm, make_satp,
-        memlayout::{KERNBASE, PHYSTOP, TRAMPOLINE, UART0, VIRTIO0},
-        pg_round_down, pg_round_up,
-        plic::PLIC,
-        power::QEMU_POWER,
-        pte2pa, Pagetable, PagetableEntry, MAXVA, PGSIZE, PTE_R, PTE_U, PTE_V, PTE_W, PTE_X,
+    arch::{
+        self,
+        hardware::{UART0, VIRTIO0},
+        mem::{
+            round_down_page, round_up_page, Pagetable, PagetableEntry, KERNEL_BASE, PAGE_SIZE,
+            PHYSICAL_END, TRAMPOLINE, VIRTUAL_MAX, PTE_R, PTE_U, PTE_V, PTE_W, PTE_X,
+        },
+        riscv::{
+            asm, make_satp,
+            plic::PLIC,
+            power::QEMU_POWER,
+            mem::pte2pa,
+        },
     },
     mem::{
         kalloc::{kalloc, kfree},
@@ -28,26 +34,32 @@ pub static mut KERNEL_PAGETABLE: Pagetable = null_mut();
 /// Make a direct-map page table for the kernel.
 pub unsafe fn kvmmake() -> Pagetable {
     let pagetable = kalloc() as Pagetable;
-    memset(pagetable.cast(), 0, PGSIZE as u32);
+    memset(pagetable.cast(), 0, PAGE_SIZE as u32);
 
     // QEMU test interface used for power management.
     kvmmap(
         pagetable,
         QEMU_POWER as u64,
         QEMU_POWER as u64,
-        PGSIZE,
+        PAGE_SIZE as u64,
         PTE_R | PTE_W,
     );
 
     // UART registers
-    kvmmap(pagetable, UART0 as u64, UART0 as u64, PGSIZE, PTE_R | PTE_W);
+    kvmmap(
+        pagetable,
+        UART0 as u64,
+        UART0 as u64,
+        PAGE_SIZE as u64,
+        PTE_R | PTE_W,
+    );
 
     // VirtIO MMIO disk interface
     kvmmap(
         pagetable,
         VIRTIO0 as u64,
         VIRTIO0 as u64,
-        PGSIZE,
+        PAGE_SIZE as u64,
         PTE_R | PTE_W,
     );
 
@@ -65,9 +77,9 @@ pub unsafe fn kvmmake() -> Pagetable {
     // Map kernel text executable and read-only.
     kvmmap(
         pagetable,
-        KERNBASE,
-        KERNBASE,
-        etext_addr - KERNBASE,
+        KERNEL_BASE as u64,
+        KERNEL_BASE as u64,
+        etext_addr - KERNEL_BASE as u64,
         PTE_R | PTE_X,
     );
 
@@ -76,7 +88,7 @@ pub unsafe fn kvmmake() -> Pagetable {
         pagetable,
         etext_addr,
         etext_addr,
-        PHYSTOP - etext_addr,
+        PHYSICAL_END as u64 - etext_addr,
         PTE_R | PTE_W,
     );
 
@@ -84,9 +96,9 @@ pub unsafe fn kvmmake() -> Pagetable {
     // the highest virtual address in the kernel.
     kvmmap(
         pagetable,
-        TRAMPOLINE,
+        TRAMPOLINE as u64,
         addr_of!(trampoline) as usize as u64,
-        PGSIZE,
+        PAGE_SIZE as u64,
         PTE_R | PTE_X,
     );
 
@@ -104,12 +116,12 @@ pub unsafe fn kvminit() {
 /// Switch hardware pagetable register to the kernel's pagetable and enable paging.
 pub unsafe fn kvminithart() {
     // Wait for any previous writes to the pagetable memory to finish.
-    asm::sfence_vma();
+    arch::mem::flush_cached_pages();
 
     asm::w_satp(make_satp(KERNEL_PAGETABLE));
 
     // Flush stale entries from the TLB.
-    asm::sfence_vma();
+    arch::mem::flush_cached_pages();
 }
 
 /// Return the address of the PTE in pagetable
@@ -127,7 +139,7 @@ pub unsafe fn kvminithart() {
 /// - 30..39: 9 bits of level 0 index.
 /// - 39..64: Must be zero.
 pub unsafe fn walk(mut pagetable: Pagetable, virtual_addr: u64, alloc: i32) -> *mut PagetableEntry {
-    if virtual_addr > MAXVA {
+    if virtual_addr > VIRTUAL_MAX as u64 {
         panic!("walk");
     }
 
@@ -150,7 +162,7 @@ pub unsafe fn walk(mut pagetable: Pagetable, virtual_addr: u64, alloc: i32) -> *
                 return null_mut();
             }
 
-            memset(pagetable.cast(), 0, PGSIZE as u32);
+            memset(pagetable.cast(), 0, PAGE_SIZE as u32);
             *pte = (((pagetable as usize) >> 12) << 10) as PagetableEntry | PTE_V as u64;
         }
 
@@ -165,7 +177,7 @@ pub unsafe fn walk(mut pagetable: Pagetable, virtual_addr: u64, alloc: i32) -> *
 /// Can only be used to look up user pages.
 #[no_mangle]
 pub unsafe extern "C" fn walkaddr(pagetable: Pagetable, virtual_addr: u64) -> u64 {
-    if virtual_addr > MAXVA {
+    if virtual_addr > VIRTUAL_MAX as u64 {
         return 0;
     }
 
@@ -211,8 +223,8 @@ pub unsafe extern "C" fn mappages(
         panic!("mappages: size = 0");
     }
 
-    let mut a = pg_round_down(virtual_addr);
-    let last = pg_round_down(virtual_addr + size - 1);
+    let mut a = round_down_page(virtual_addr as usize) as u64;
+    let last = round_down_page((virtual_addr + size - 1) as usize) as u64;
 
     loop {
         let pte = walk(pagetable, a, 1);
@@ -229,8 +241,8 @@ pub unsafe extern "C" fn mappages(
         if a == last {
             break;
         } else {
-            a += PGSIZE;
-            physical_addr += PGSIZE;
+            a += PAGE_SIZE as u64;
+            physical_addr += PAGE_SIZE as u64;
         }
     }
 
@@ -248,11 +260,11 @@ pub unsafe extern "C" fn uvmunmap(
     num_pages: u64,
     do_free: i32,
 ) {
-    if virtual_addr % PGSIZE != 0 {
+    if virtual_addr % PAGE_SIZE as u64 != 0 {
         panic!("uvmunmap: not aligned");
     }
     let mut a = virtual_addr;
-    while a < virtual_addr + num_pages * PGSIZE {
+    while a < virtual_addr + num_pages * PAGE_SIZE as u64 {
         let pte = walk(pagetable, a, 0);
         if pte.is_null() {
             panic!("uvmunmap: walk");
@@ -266,7 +278,7 @@ pub unsafe extern "C" fn uvmunmap(
         }
 
         *pte = 0;
-        a += PGSIZE;
+        a += PAGE_SIZE as u64;
     }
 }
 
@@ -279,25 +291,25 @@ pub unsafe extern "C" fn uvmcreate() -> Pagetable {
     if pagetable.is_null() {
         return null_mut();
     }
-    memset(pagetable.cast(), 0, PGSIZE as u32);
+    memset(pagetable.cast(), 0, PAGE_SIZE as u32);
     pagetable
 }
 
 /// Load the user initcode into address 0 of pagetable for the very first process.
 ///
-/// `size` must be less than `PGSIZE`.
+/// `size` must be less than `PAGE_SIZE`.
 #[no_mangle]
 pub unsafe extern "C" fn uvmfirst(pagetable: Pagetable, src: *mut u8, size: u32) {
-    if size >= PGSIZE as u32 {
+    if size >= PAGE_SIZE as u32 {
         panic!("uvmfirst: more than a page");
     }
 
     let mem = kalloc();
-    memset(mem, 0, PGSIZE as u32);
+    memset(mem, 0, PAGE_SIZE as u32);
     mappages(
         pagetable,
         0,
-        PGSIZE,
+        PAGE_SIZE as u64,
         mem as usize as u64,
         PTE_W | PTE_R | PTE_X | PTE_U,
     );
@@ -319,7 +331,7 @@ pub unsafe extern "C" fn uvmalloc(
         return old_size;
     }
 
-    old_size = pg_round_up(old_size);
+    old_size = round_up_page(old_size as usize) as u64;
     let mut a = old_size;
 
     while a < new_size {
@@ -329,12 +341,12 @@ pub unsafe extern "C" fn uvmalloc(
             return 0;
         }
 
-        memset(mem.cast(), 0, PGSIZE as u32);
+        memset(mem.cast(), 0, PAGE_SIZE as u64 as u32);
 
         if mappages(
             pagetable,
             a,
-            PGSIZE,
+            PAGE_SIZE as u64,
             mem as usize as u64,
             PTE_R | PTE_U | xperm,
         ) != 0
@@ -344,7 +356,7 @@ pub unsafe extern "C" fn uvmalloc(
             return 0;
         }
 
-        a += PGSIZE;
+        a += PAGE_SIZE as u64;
     }
 
     new_size
@@ -361,9 +373,15 @@ pub unsafe extern "C" fn uvmdealloc(pagetable: Pagetable, old_size: u64, new_siz
         return old_size;
     }
 
-    if pg_round_up(new_size) < pg_round_up(old_size) {
-        let num_pages = (pg_round_up(old_size) - pg_round_up(new_size)) / PGSIZE;
-        uvmunmap(pagetable, pg_round_up(new_size), num_pages, 1);
+    if round_up_page(new_size as usize) < round_up_page(old_size as usize) {
+        let num_pages =
+            (round_up_page(old_size as usize) - round_up_page(new_size as usize)) / PAGE_SIZE;
+        uvmunmap(
+            pagetable,
+            round_up_page(new_size as usize) as u64,
+            num_pages as u64,
+            1,
+        );
     }
 
     new_size
@@ -393,7 +411,12 @@ pub unsafe extern "C" fn freewalk(pagetable: Pagetable) {
 #[no_mangle]
 pub unsafe extern "C" fn uvmfree(pagetable: Pagetable, size: u64) {
     if size > 0 {
-        uvmunmap(pagetable, 0, pg_round_up(size) / PGSIZE, 1);
+        uvmunmap(
+            pagetable,
+            0,
+            (round_up_page(size as usize) / PAGE_SIZE) as u64,
+            1,
+        );
     }
     freewalk(pagetable);
 }
@@ -421,19 +444,23 @@ pub unsafe extern "C" fn uvmcopy(old: Pagetable, new: Pagetable, size: u64) -> i
 
         let mem = kalloc();
         if mem.is_null() {
-            uvmunmap(new, 0, i / PGSIZE, 1);
+            uvmunmap(new, 0, i / PAGE_SIZE as u64, 1);
             return -1;
         }
 
-        memmove(mem.cast(), (pa as usize as *mut u8).cast(), PGSIZE as u32);
+        memmove(
+            mem.cast(),
+            (pa as usize as *mut u8).cast(),
+            PAGE_SIZE as u64 as u32,
+        );
 
-        if mappages(new, i, PGSIZE, mem as usize as u64, flags as i32) != 0 {
+        if mappages(new, i, PAGE_SIZE as u64, mem as usize as u64, flags as i32) != 0 {
             kfree(mem.cast());
-            uvmunmap(new, 0, i / PGSIZE, 1);
+            uvmunmap(new, 0, i / PAGE_SIZE as u64, 1);
             return -1;
         }
 
-        i += PGSIZE;
+        i += PAGE_SIZE as u64;
     }
 
     0
@@ -463,13 +490,13 @@ pub unsafe extern "C" fn copyout(
     mut len: u64,
 ) -> i32 {
     while len > 0 {
-        let va0 = pg_round_down(dst_virtual_addr);
+        let va0 = round_down_page(dst_virtual_addr as usize) as u64;
         let pa0 = walkaddr(pagetable, va0);
         if pa0 == 0 {
             return -1;
         }
 
-        let mut n = PGSIZE - (dst_virtual_addr - va0);
+        let mut n = PAGE_SIZE as u64 - (dst_virtual_addr - va0);
         if n > len {
             n = len;
         }
@@ -481,7 +508,7 @@ pub unsafe extern "C" fn copyout(
 
         len -= n;
         src = src.add(n as usize);
-        dst_virtual_addr = va0 + PGSIZE;
+        dst_virtual_addr = va0 + PAGE_SIZE as u64;
     }
     0
 }
@@ -498,13 +525,13 @@ pub unsafe extern "C" fn copyin(
     mut len: u64,
 ) -> i32 {
     while len > 0 {
-        let va0 = pg_round_down(src_virtual_addr);
+        let va0 = round_down_page(src_virtual_addr as usize) as u64;
         let pa0 = walkaddr(pagetable, va0);
         if pa0 == 0 {
             return -1;
         }
 
-        let mut n = PGSIZE - (src_virtual_addr - va0);
+        let mut n = PAGE_SIZE as u64 - (src_virtual_addr - va0);
         if n > len {
             n = len;
         }
@@ -516,7 +543,7 @@ pub unsafe extern "C" fn copyin(
 
         len -= n;
         dst = dst.add(n as usize);
-        src_virtual_addr = va0 + PGSIZE;
+        src_virtual_addr = va0 + PAGE_SIZE as u64;
     }
     0
 }
@@ -535,13 +562,13 @@ pub unsafe fn copyinstr(
     let mut got_null = false;
 
     while !got_null && max > 0 {
-        let va0 = pg_round_down(src_virtual_addr);
+        let va0 = round_down_page(src_virtual_addr as usize) as u64;
         let pa0 = walkaddr(pagetable, va0);
         if pa0 == 0 {
             return -1;
         }
 
-        let mut n = PGSIZE - (src_virtual_addr - va0);
+        let mut n = PAGE_SIZE as u64 - (src_virtual_addr - va0);
         if n > max {
             n = max;
         }
@@ -562,7 +589,7 @@ pub unsafe fn copyinstr(
             dst = dst.add(1);
         }
 
-        src_virtual_addr = va0 + PGSIZE;
+        src_virtual_addr = va0 + PAGE_SIZE as u64;
     }
 
     if got_null {

@@ -3,7 +3,7 @@
 //! and pipe buffers. Allocates whole 4096-byte pages.
 
 use crate::{
-    arch::riscv::{memlayout::PHYSTOP, pg_round_up, PGSIZE},
+    arch::mem::{round_up_page, PAGE_SIZE, PHYSICAL_END},
     mem::memset,
     sync::spinlock::Spinlock,
 };
@@ -34,15 +34,15 @@ pub struct KernelMemory {
 
 pub unsafe fn kinit() {
     kmem.lock = Spinlock::new();
-    freerange(addr_of_mut!(end).cast(), PHYSTOP as *mut u8)
+    freerange(addr_of_mut!(end).cast(), PHYSICAL_END as *mut u8)
 }
 
 unsafe fn freerange(pa_start: *mut u8, pa_end: *mut u8) {
-    let mut p = pg_round_up(pa_start as usize as u64) as *mut u8;
+    let mut p = round_up_page(pa_start as usize) as *mut u8;
 
-    while p.add(PGSIZE as usize) <= pa_end {
+    while p.add(PAGE_SIZE) <= pa_end {
         kfree(p.cast());
-        p = p.add(PGSIZE as usize);
+        p = p.add(PAGE_SIZE);
     }
 }
 
@@ -52,14 +52,14 @@ unsafe fn freerange(pa_start: *mut u8, pa_end: *mut u8) {
 /// allocator - see kinit above.
 #[no_mangle]
 pub unsafe extern "C" fn kfree(pa: *mut u8) {
-    if (pa as usize as u64 % PGSIZE) != 0
+    if (pa as usize % PAGE_SIZE) != 0
         || pa <= addr_of_mut!(end) as *mut u8
-        || pa >= PHYSTOP as *mut u8
+        || pa >= PHYSICAL_END as *mut u8
     {
         panic!("kfree");
     }
 
-    memset(pa, 0, PGSIZE as u32);
+    memset(pa, 0, PAGE_SIZE as u32);
 
     let run: *mut Run = pa.cast();
 
@@ -82,7 +82,7 @@ pub unsafe extern "C" fn kalloc() -> *mut u8 {
     }
 
     if !run.is_null() {
-        memset(run.cast(), 0, PGSIZE as u32);
+        memset(run.cast(), 0, PAGE_SIZE as u32);
     }
 
     run as *mut u8

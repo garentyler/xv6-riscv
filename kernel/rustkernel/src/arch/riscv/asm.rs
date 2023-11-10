@@ -245,7 +245,7 @@ pub unsafe fn r_ra() -> u64 {
     x
 }
 
-// Flush the TLB.
+// Flush the Translation Look-aside Buffer (TLB).
 #[inline(always)]
 pub unsafe fn sfence_vma() {
     // The "zero, zero" means flush all TLB entries.

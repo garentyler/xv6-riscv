@@ -4,7 +4,7 @@ use super::{
     process::{proc, Process, ProcessState},
 };
 use crate::{
-    arch::riscv::{intr_get, intr_on},
+    arch,
     sync::spinlock::{Spinlock, SpinlockGuard},
 };
 use core::{
@@ -39,7 +39,7 @@ pub unsafe fn scheduler() -> ! {
 
     loop {
         // Avoid deadlock by ensuring that devices can interrupt.
-        intr_on();
+        arch::interrupt::enable_interrupts();
 
         for p in &mut proc {
             let _guard = p.lock.lock();
@@ -76,7 +76,7 @@ pub unsafe fn sched() {
         panic!("sched locks");
     } else if p.state == ProcessState::Running {
         panic!("sched running");
-    } else if intr_get() > 0 {
+    } else if arch::interrupt::interrupts_enabled() > 0 {
         panic!("sched interruptible");
     }
 
