@@ -4,14 +4,9 @@ use crate::{
         hardware::{UART0, VIRTIO0},
         mem::{
             round_down_page, round_up_page, Pagetable, PagetableEntry, KERNEL_BASE, PAGE_SIZE,
-            PHYSICAL_END, TRAMPOLINE, VIRTUAL_MAX, PTE_R, PTE_U, PTE_V, PTE_W, PTE_X,
+            PHYSICAL_END, PTE_R, PTE_U, PTE_V, PTE_W, PTE_X, TRAMPOLINE, VIRTUAL_MAX,
         },
-        riscv::{
-            asm, make_satp,
-            plic::PLIC,
-            power::QEMU_POWER,
-            mem::pte2pa,
-        },
+        riscv::{asm, make_satp, mem::pte2pa, plic::PLIC, power::QEMU_POWER},
     },
     mem::{
         kalloc::{kalloc, kfree},

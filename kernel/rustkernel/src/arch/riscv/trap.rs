@@ -1,9 +1,9 @@
+use super::{asm, mem::make_satp, SSTATUS_SPIE, SSTATUS_SPP};
 use crate::{
     arch::{
-        self,
-        mem::{PAGE_SIZE, TRAMPOLINE},
         hardware::{UART0_IRQ, VIRTIO0_IRQ},
-        riscv::{asm, SSTATUS_SPP, SSTATUS_SPIE, mem::make_satp},
+        interrupt,
+        mem::{PAGE_SIZE, TRAMPOLINE},
     },
     println,
     proc::{
@@ -54,7 +54,7 @@ pub unsafe fn devintr() -> i32 {
         // This is a supervisor external interrupt, via PLIC.
 
         // IRQ indicates which device interrupted.
-        let irq = arch::interrupt::handle_interrupt();
+        let irq = interrupt::handle_interrupt();
 
         if irq == UART0_IRQ {
             crate::console::uart::UART0.interrupt();
@@ -68,7 +68,7 @@ pub unsafe fn devintr() -> i32 {
         // interrupt at a time; tell the PLIC the device is
         // now allowed to interrupt again.
         if irq > 0 {
-            arch::interrupt::complete_interrupt(irq);
+            interrupt::complete_interrupt(irq);
         }
 
         1
@@ -90,46 +90,6 @@ pub unsafe fn devintr() -> i32 {
     }
 }
 
-#[derive(Default)]
-pub struct InterruptBlocker;
-impl InterruptBlocker {
-    pub fn new() -> InterruptBlocker {
-        unsafe {
-            let interrupts_before = arch::interrupt::interrupts_enabled();
-            let cpu = Cpu::current();
-
-            arch::interrupt::disable_interrupts();
-
-            if cpu.interrupt_disable_layers == 0 {
-                cpu.previous_interrupts_enabled = interrupts_before;
-            }
-            cpu.interrupt_disable_layers += 1;
-            // crate::sync::spinlock::push_off();
-        }
-        InterruptBlocker
-    }
-}
-impl core::ops::Drop for InterruptBlocker {
-    fn drop(&mut self) {
-        unsafe {
-            let cpu = Cpu::current();
-
-            if arch::interrupt::interrupts_enabled() == 1 || cpu.interrupt_disable_layers < 1 {
-                // panic!("pop_off mismatched");
-                return;
-            }
-
-            cpu.interrupt_disable_layers -= 1;
-
-            if cpu.interrupt_disable_layers == 0 && cpu.previous_interrupts_enabled == 1 {
-                arch::interrupt::enable_interrupts();
-            }
-            // crate::sync::spinlock::pop_off();
-        }
-    }
-}
-impl !Send for InterruptBlocker {}
-
 /// Return to user space
 #[no_mangle]
 pub unsafe extern "C" fn usertrapret() {
@@ -138,7 +98,7 @@ pub unsafe extern "C" fn usertrapret() {
     // We're about to switch the destination of traps from
     // kerneltrap() to usertrap(), so turn off interrupts until
     // we're back in user space, where usertrap() is correct.
-    arch::interrupt::disable_interrupts();
+    interrupt::disable_interrupts();
 
     // Send syscalls, interrupts, and exceptions to uservec in trampoline.S
     let trampoline_uservec =
@@ -193,13 +153,18 @@ pub unsafe extern "C" fn kerneltrap() {
 
     if sstatus & SSTATUS_SPP == 0 {
         panic!("kerneltrap: not from supervisor mode");
-    } else if arch::interrupt::interrupts_enabled() != 0 {
+    } else if interrupt::interrupts_enabled() != 0 {
         panic!("kerneltrap: interrupts enabled");
     }
 
     let which_dev = devintr();
     if which_dev == 0 {
-        println!("scause {}\nsepc={} stval={}", scause, asm::r_sepc(), asm::r_stval());
+        println!(
+            "scause {}\nsepc={} stval={}",
+            scause,
+            asm::r_sepc(),
+            asm::r_stval()
+        );
         panic!("kerneltrap");
     } else if which_dev == 2
         && Process::current().is_some()
@@ -246,7 +211,7 @@ pub unsafe extern "C" fn usertrap() {
 
         // An interrupt will change sepc, scause, and sstatus,
         // so enable only now that we're done with those registers.
-        arch::interrupt::enable_interrupts();
+        interrupt::enable_interrupts();
 
         syscall();
     }
@@ -273,36 +238,4 @@ pub unsafe extern "C" fn usertrap() {
     }
 
     usertrapret();
-}
-
-// push_intr_off/pop_intr_off are like intr_off()/intr_on() except that they are matched:
-// it takes two pop_intr_off()s to undo two push_intr_off()s.  Also, if interrupts
-// are initially off, then push_intr_off, pop_intr_off leaves them off.
-
-pub unsafe fn push_intr_off() {
-    let old = arch::interrupt::interrupts_enabled();
-    let cpu = Cpu::current();
-
-    arch::interrupt::disable_interrupts();
-    if cpu.interrupt_disable_layers == 0 {
-        cpu.previous_interrupts_enabled = old;
-    }
-    cpu.interrupt_disable_layers += 1;
-}
-pub unsafe fn pop_intr_off() {
-    let cpu = Cpu::current();
-
-    if arch::interrupt::interrupts_enabled() == 1 {
-        // crate::panic_byte(b'0');
-        panic!("pop_intr_off - interruptible");
-    } else if cpu.interrupt_disable_layers < 1 {
-        // crate::panic_byte(b'1');
-        panic!("pop_intr_off");
-    }
-
-    cpu.interrupt_disable_layers -= 1;
-
-    if cpu.interrupt_disable_layers == 0 && cpu.previous_interrupts_enabled == 1 {
-        arch::interrupt::enable_interrupts();
-    }
 }

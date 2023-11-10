@@ -1,5 +1,5 @@
 use crate::{
-    arch::power::shutdown,
+    arch::{clock::CLOCK_TICKS, power::shutdown},
     fs::{
         self,
         file::{self, File},
@@ -10,7 +10,6 @@ use crate::{
     println,
     proc::process::Process,
     string::strlen,
-    trap::CLOCK_TICKS,
     NOFILE,
 };
 use core::{

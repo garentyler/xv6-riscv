@@ -1,11 +1,12 @@
 pub mod asm;
 pub mod clint;
 pub mod cpu;
-pub mod mem;
 pub mod hardware;
+pub mod mem;
 pub mod plic;
 pub mod power;
 pub mod start;
+pub mod trap;
 
 pub use mem::make_satp;
 

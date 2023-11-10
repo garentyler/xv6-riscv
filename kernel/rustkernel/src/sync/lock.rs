@@ -30,7 +30,7 @@ impl Lock {
 
         match lock_strategy {
             LockStrategy::Spin => {
-                crate::trap::push_intr_off();
+                crate::arch::trap::push_intr_off();
 
                 while self.locked.swap(true, Ordering::Acquire) {
                     core::hint::spin_loop();
@@ -64,7 +64,7 @@ impl Lock {
 
         match lock_strategy {
             LockStrategy::Spin => {
-                crate::trap::pop_intr_off();
+                crate::arch::trap::pop_intr_off();
             }
             LockStrategy::Sleep => {
                 wakeup(addr_of!(*self).cast_mut().cast());

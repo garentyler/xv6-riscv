@@ -2,8 +2,8 @@
 #![allow(non_upper_case_globals)]
 
 use crate::{
-    console::consoleintr, proc::scheduler::wakeup, queue::Queue, sync::mutex::Mutex,
-    trap::InterruptBlocker,
+    arch::trap::InterruptBlocker, console::consoleintr, proc::scheduler::wakeup, queue::Queue,
+    sync::mutex::Mutex,
 };
 use core::ptr::addr_of;
 

@@ -8,8 +8,8 @@ use super::{
 };
 use crate::{
     arch::{
-        mem::{Pagetable, PAGE_SIZE, TRAMPOLINE, TRAPFRAME,
-        PTE_R, PTE_W, PTE_X},
+        mem::{Pagetable, PAGE_SIZE, PTE_R, PTE_W, PTE_X, TRAMPOLINE, TRAPFRAME},
+        trap::InterruptBlocker,
     },
     fs::{
         file::{fileclose, filedup, File, Inode},
@@ -135,7 +135,7 @@ impl Process {
         }
     }
     pub fn current() -> Option<&'static mut Process> {
-        let _ = crate::trap::InterruptBlocker::new();
+        let _ = InterruptBlocker::new();
         let p = Cpu::current().proc;
         if p.is_null() {
             None

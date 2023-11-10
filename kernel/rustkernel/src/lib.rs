@@ -18,7 +18,6 @@ mod queue;
 mod string;
 mod sync;
 mod syscall;
-mod trap;
 
 use crate::{proc::cpu::Cpu, sync::mutex::Mutex};
 use core::ffi::{c_char, CStr};
@@ -63,7 +62,7 @@ pub unsafe fn main() -> ! {
         mem::virtual_memory::kvminit();
         mem::virtual_memory::kvminithart();
         proc::process::procinit();
-        trap::trapinithart();
+        arch::trap::inithart();
         arch::interrupt::init();
         arch::interrupt::inithart();
         io::bio::binit();
@@ -77,7 +76,7 @@ pub unsafe fn main() -> ! {
             core::hint::spin_loop();
         }
         mem::virtual_memory::kvminithart();
-        trap::trapinithart();
+        arch::trap::inithart();
         arch::interrupt::inithart();
     }
 

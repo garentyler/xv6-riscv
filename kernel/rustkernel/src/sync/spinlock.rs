@@ -1,9 +1,9 @@
 use crate::{
+    arch::trap::{pop_intr_off, push_intr_off},
     proc::{
         process::{Process, ProcessState},
         scheduler::sched,
     },
-    trap::{pop_intr_off, push_intr_off},
 };
 use core::{
     ffi::c_char,
