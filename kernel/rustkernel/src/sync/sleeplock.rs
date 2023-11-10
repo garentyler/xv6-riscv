@@ -34,6 +34,13 @@ impl Sleeplock {
         wakeup(addr_of!(*self).cast_mut().cast());
     }
 }
+impl Clone for Sleeplock {
+    fn clone(&self) -> Self {
+        Sleeplock {
+            locked: AtomicBool::new(self.locked.load(Ordering::SeqCst)),
+        }
+    }
+}
 
 pub struct SleeplockGuard<'l> {
     pub lock: &'l Sleeplock,

@@ -77,6 +77,14 @@ impl Default for Lock {
         Lock::new()
     }
 }
+impl Clone for Lock {
+    fn clone(&self) -> Self {
+        Lock {
+            locked: AtomicBool::new(self.locked.load(Ordering::SeqCst)),
+            lock_strategy: UnsafeCell::new(self.lock_strategy()),
+        }
+    }
+}
 unsafe impl Sync for Lock {}
 
 pub struct LockGuard<'l> {

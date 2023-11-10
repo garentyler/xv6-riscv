@@ -42,6 +42,13 @@ impl Spinlock {
         pop_intr_off();
     }
 }
+impl Clone for Spinlock {
+    fn clone(&self) -> Self {
+        Spinlock {
+            locked: AtomicBool::new(self.locked.load(Ordering::SeqCst)),
+        }
+    }
+}
 
 pub struct SpinlockGuard<'l> {
     pub lock: &'l Spinlock,
