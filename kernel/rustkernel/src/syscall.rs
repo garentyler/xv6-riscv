@@ -1,5 +1,5 @@
 use crate::{
-    arch::riscv::memlayout::QEMU_POWER,
+    arch::power::shutdown,
     fs::{
         self,
         file::{self, File},
@@ -200,11 +200,7 @@ impl Syscall {
                     -1i64 as u64
                 }
             }
-            Syscall::Shutdown => {
-                let qemu_power = QEMU_POWER as usize as *mut u32;
-                qemu_power.write_volatile(0x5555u32);
-                panic!("shutdown");
-            }
+            Syscall::Shutdown => unsafe { shutdown() },
         }
     }
 }

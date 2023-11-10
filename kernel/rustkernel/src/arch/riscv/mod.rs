@@ -2,6 +2,7 @@ pub mod asm;
 pub mod clint;
 pub mod memlayout;
 pub mod plic;
+pub mod power;
 pub mod start;
 
 pub use asm::*;

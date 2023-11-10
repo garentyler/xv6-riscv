@@ -2,3 +2,4 @@
 pub mod riscv;
 
 pub mod interrupt;
+pub mod power;

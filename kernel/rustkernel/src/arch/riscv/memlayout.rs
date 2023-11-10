@@ -18,9 +18,6 @@
 
 use super::{MAXVA, PGSIZE};
 
-// QEMU test interface. Used for power off and on.
-pub const QEMU_POWER: u64 = 0x100000u64;
-
 // QEMU puts UART registers here in physical memory.
 pub const UART0: usize = 0x10000000;
 pub const UART0_IRQ: usize = 10;

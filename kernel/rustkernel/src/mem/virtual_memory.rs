@@ -1,9 +1,10 @@
 use crate::{
     arch::riscv::{
         asm, make_satp,
-        memlayout::{KERNBASE, PHYSTOP, QEMU_POWER, TRAMPOLINE, UART0, VIRTIO0},
+        memlayout::{KERNBASE, PHYSTOP, TRAMPOLINE, UART0, VIRTIO0},
         pg_round_down, pg_round_up,
         plic::PLIC,
+        power::QEMU_POWER,
         pte2pa, Pagetable, PagetableEntry, MAXVA, PGSIZE, PTE_R, PTE_U, PTE_V, PTE_W, PTE_X,
     },
     mem::{
@@ -30,7 +31,13 @@ pub unsafe fn kvmmake() -> Pagetable {
     memset(pagetable.cast(), 0, PGSIZE as u32);
 
     // QEMU test interface used for power management.
-    kvmmap(pagetable, QEMU_POWER, QEMU_POWER, PGSIZE, PTE_R | PTE_W);
+    kvmmap(
+        pagetable,
+        QEMU_POWER as u64,
+        QEMU_POWER as u64,
+        PGSIZE,
+        PTE_R | PTE_W,
+    );
 
     // UART registers
     kvmmap(pagetable, UART0 as u64, UART0 as u64, PGSIZE, PTE_R | PTE_W);
