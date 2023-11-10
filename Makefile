@@ -101,8 +101,8 @@ UPROGS=\
 	$P/_zombie\
 	$P/_shutdown\
 
-fs.img: mkfs README $(UPROGS)
-	mkfs/mkfs fs.img README $(UPROGS)
+fs.img: mkfs README.md $(UPROGS)
+	mkfs/mkfs fs.img README.md $(UPROGS)
 
 -include kernel/*.d user/*.d
 
