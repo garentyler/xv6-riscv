@@ -1,6 +1,8 @@
 pub mod asm;
+pub mod clint;
 pub mod memlayout;
 pub mod plic;
+pub mod start;
 
 pub use asm::*;
 pub use memlayout::*;

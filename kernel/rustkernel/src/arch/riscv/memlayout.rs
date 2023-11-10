@@ -29,13 +29,6 @@ pub const UART0_IRQ: usize = 10;
 pub const VIRTIO0: usize = 0x10001000;
 pub const VIRTIO0_IRQ: usize = 1;
 
-// Core Local Interrupter (CLINT), which contains the timer.
-pub const CLINT: u64 = 0x2000000;
-pub const CLINT_MTIME: u64 = CLINT + 0xbff8;
-pub fn clint_mtimecmp(hartid: u64) -> u64 {
-    CLINT + 0x4000 + (8 * hartid)
-}
-
 // The kernel expects there to be RAM
 // for use by the kernel and user pages
 // from physical address 0x80000000 to PHYSTOP.

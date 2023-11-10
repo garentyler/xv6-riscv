@@ -15,7 +15,6 @@ mod io;
 mod mem;
 mod proc;
 mod queue;
-mod start;
 mod string;
 mod sync;
 mod syscall;
