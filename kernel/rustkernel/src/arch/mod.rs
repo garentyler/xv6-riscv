@@ -1,5 +1,5 @@
 #[cfg(target_arch = "riscv64")]
-pub mod riscv;
+mod riscv;
 #[cfg(target_arch = "riscv64")]
 pub use riscv::hardware;
 
@@ -41,6 +41,11 @@ pub mod mem {
     pub fn round_down_page(addr: usize) -> usize {
         addr & !(PAGE_SIZE - 1)
     }
+}
+
+pub mod virtual_memory {
+    #[cfg(target_arch = "riscv64")]
+    pub use super::riscv::virtual_memory::{kvminit as init, kvminithart as inithart, copyin, copyinstr, copyout, mappages, uvmalloc, uvmcopy, uvmcreate, uvmdealloc, uvmfree, uvmunmap};
 }
 
 pub mod power {

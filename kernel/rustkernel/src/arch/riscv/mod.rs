@@ -7,8 +7,7 @@ pub mod plic;
 pub mod power;
 pub mod start;
 pub mod trap;
-
-pub use mem::make_satp;
+pub mod virtual_memory;
 
 /// Previous mode
 pub const MSTATUS_MPP_MASK: u64 = 3 << 11;

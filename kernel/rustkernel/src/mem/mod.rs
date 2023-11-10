@@ -1,5 +1,4 @@
 pub mod kalloc;
-pub mod virtual_memory;
 
 #[no_mangle]
 pub unsafe extern "C" fn memset(dst: *mut u8, data: i32, max_bytes: u32) -> *mut u8 {

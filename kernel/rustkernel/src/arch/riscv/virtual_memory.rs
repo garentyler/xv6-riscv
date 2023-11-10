@@ -1,3 +1,4 @@
+use super::{asm, mem::{make_satp, pte2pa}, plic::PLIC, power::QEMU_POWER};
 use crate::{
     arch::{
         self,
@@ -6,7 +7,6 @@ use crate::{
             round_down_page, round_up_page, Pagetable, PagetableEntry, KERNEL_BASE, PAGE_SIZE,
             PHYSICAL_END, PTE_R, PTE_U, PTE_V, PTE_W, PTE_X, TRAMPOLINE, VIRTUAL_MAX,
         },
-        riscv::{asm, make_satp, mem::pte2pa, plic::PLIC, power::QEMU_POWER},
     },
     mem::{
         kalloc::{kalloc, kfree},

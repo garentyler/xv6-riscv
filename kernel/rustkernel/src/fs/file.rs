@@ -3,7 +3,7 @@
 use crate::{
     fs::{log, stat::Stat},
     io::pipe::Pipe,
-    mem::virtual_memory::copyout,
+    arch::virtual_memory::copyout,
     proc::process::Process,
     sync::{sleeplock::Sleeplock, spinlock::Spinlock},
 };

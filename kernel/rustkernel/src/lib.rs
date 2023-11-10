@@ -59,8 +59,8 @@ pub unsafe fn main() -> ! {
         console::consoleinit();
         mem::kalloc::kinit();
         println!("\nxv6 kernel is booting");
-        mem::virtual_memory::kvminit();
-        mem::virtual_memory::kvminithart();
+        arch::virtual_memory::init();
+        arch::virtual_memory::inithart();
         proc::process::procinit();
         arch::trap::inithart();
         arch::interrupt::init();
@@ -75,7 +75,7 @@ pub unsafe fn main() -> ! {
         while !STARTED {
             core::hint::spin_loop();
         }
-        mem::virtual_memory::kvminithart();
+        arch::virtual_memory::inithart();
         arch::trap::inithart();
         arch::interrupt::inithart();
     }

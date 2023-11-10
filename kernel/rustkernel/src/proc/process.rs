@@ -10,6 +10,9 @@ use crate::{
     arch::{
         mem::{Pagetable, PAGE_SIZE, PTE_R, PTE_W, PTE_X, TRAMPOLINE, TRAPFRAME},
         trap::InterruptBlocker,
+        virtual_memory::{
+            copyout, mappages, uvmalloc, uvmcopy, uvmcreate, uvmdealloc, uvmfree, uvmunmap,
+        },
     },
     fs::{
         file::{fileclose, filedup, File, Inode},
@@ -19,9 +22,6 @@ use crate::{
     mem::{
         kalloc::{kalloc, kfree},
         memset,
-        virtual_memory::{
-            copyout, mappages, uvmalloc, uvmcopy, uvmcreate, uvmdealloc, uvmfree, uvmunmap,
-        },
     },
     sync::spinlock::Spinlock,
     uprintln,
