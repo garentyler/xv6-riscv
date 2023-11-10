@@ -5,8 +5,8 @@ use crate::{
         virtual_memory::{copyin, copyinstr},
     },
     fs::{
-        self,
         file::{self, File},
+        inode::{ilock, iput, iunlock, namei},
         log::LogOperation,
         stat::KIND_DIR,
     },
@@ -112,18 +112,18 @@ impl Syscall {
                 if argstr(0, addr_of_mut!(path).cast(), path.len() as i32) < 0 {
                     return -1i64 as u64;
                 }
-                let inode = fs::namei(addr_of_mut!(path).cast());
+                let inode = namei(addr_of_mut!(path).cast());
                 if inode.is_null() {
                     return -1i64 as u64;
                 }
-                fs::ilock(inode);
+                ilock(inode);
                 if (*inode).kind != KIND_DIR {
-                    fs::iunlock(inode);
-                    fs::iput(inode);
+                    iunlock(inode);
+                    iput(inode);
                     return -1i64 as u64;
                 }
-                fs::iunlock(inode);
-                fs::iput(proc.current_dir);
+                iunlock(inode);
+                iput(proc.current_dir);
                 proc.current_dir = inode;
                 0
             }

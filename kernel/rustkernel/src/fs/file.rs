@@ -1,11 +1,12 @@
 //! Support functions for system calls that involve file descriptors.
 
+use super::inode::{iput, readi, stati, writei, Inode, InodeLockGuard};
 use crate::{
     arch::virtual_memory::copyout,
     fs::{log, stat::Stat},
     io::pipe::Pipe,
     proc::process::Process,
-    sync::{mutex::Mutex, sleeplock::Sleeplock, spinlock::Spinlock},
+    sync::mutex::Mutex,
 };
 use core::ptr::{addr_of_mut, null_mut};
 
@@ -52,52 +53,6 @@ impl File {
     }
 }
 
-#[repr(C)]
-pub struct Inode {
-    /// Device number.
-    pub device: u32,
-    /// Inode number.
-    pub inum: u32,
-    /// Reference count.
-    pub references: i32,
-
-    pub lock: Sleeplock,
-    /// Inode has been read from disk?
-    pub valid: i32,
-
-    // Copy of DiskInode
-    pub kind: i16,
-    pub major: i16,
-    pub minor: i16,
-    pub num_links: i16,
-    pub size: u32,
-    pub addresses: [u32; crate::fs::NDIRECT + 1],
-}
-impl Inode {
-    pub fn lock(&mut self) -> InodeLockGuard<'_> {
-        InodeLockGuard::new(self)
-    }
-}
-
-pub struct InodeLockGuard<'i> {
-    pub inode: &'i mut Inode,
-}
-impl<'i> InodeLockGuard<'i> {
-    pub fn new(inode: &mut Inode) -> InodeLockGuard<'_> {
-        unsafe {
-            super::ilock(inode as *mut Inode);
-        }
-        InodeLockGuard { inode }
-    }
-}
-impl<'i> core::ops::Drop for InodeLockGuard<'i> {
-    fn drop(&mut self) {
-        unsafe {
-            super::iunlock(self.inode as *mut Inode);
-        }
-    }
-}
-
 /// Map major device number to device functions.
 #[repr(C)]
 #[derive(Copy, Clone, Default)]
@@ -112,12 +67,6 @@ impl Devsw {
             write: None,
         }
     }
-}
-
-#[repr(C)]
-pub struct FileTable {
-    lock: Spinlock,
-    files: [File; crate::NFILE],
 }
 
 #[no_mangle]
@@ -176,7 +125,7 @@ pub unsafe extern "C" fn fileclose(file: *mut File) {
             FileType::Pipe => (*f.pipe).close(f.writable as i32),
             FileType::Inode | FileType::Device => {
                 let _operation = log::LogOperation::new();
-                super::iput(f.ip);
+                iput(f.ip);
             }
             FileType::None => {}
         }
@@ -193,7 +142,7 @@ pub unsafe fn filestat(file: *mut File, addr: u64) -> i32 {
     if (*file).kind == FileType::Inode || (*file).kind == FileType::Device {
         {
             let _guard = InodeLockGuard::new((*file).ip.as_mut().unwrap());
-            super::stati((*file).ip, addr_of_mut!(stat));
+            stati((*file).ip, addr_of_mut!(stat));
         }
 
         if copyout(
@@ -237,7 +186,7 @@ pub unsafe fn fileread(file: *mut File, addr: u64, num_bytes: i32) -> i32 {
         }
         FileType::Inode => {
             let _guard = InodeLockGuard::new((*file).ip.as_mut().unwrap());
-            let r = super::readi((*file).ip, 1, addr, (*file).off, num_bytes as u32);
+            let r = readi((*file).ip, 1, addr, (*file).off, num_bytes as u32);
             if r > 0 {
                 (*file).off += r as u32;
             }
@@ -289,7 +238,7 @@ pub unsafe fn filewrite(file: *mut File, addr: u64, num_bytes: i32) -> i32 {
                     let _operation = log::LogOperation::new();
                     let _guard = InodeLockGuard::new((*file).ip.as_mut().unwrap());
 
-                    let r = super::writei((*file).ip, 1, addr + i as u64, (*file).off, n as u32);
+                    let r = writei((*file).ip, 1, addr + i as u64, (*file).off, n as u32);
                     if r > 0 {
                         (*file).off += r as u32;
                     }

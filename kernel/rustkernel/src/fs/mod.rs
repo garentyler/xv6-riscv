@@ -2,10 +2,9 @@
 //! Both the kernel and user programs use this header file.
 
 pub mod file;
+pub mod inode;
 pub mod log;
 pub mod stat;
-
-use crate::fs::file::Inode;
 
 // Root inode
 pub const ROOTINO: u64 = 1;
@@ -86,18 +85,4 @@ pub struct DirectoryEntry {
 
 extern "C" {
     pub fn fsinit(dev: i32);
-    pub fn iinit();
-    pub fn ialloc(dev: u32, kind: i16) -> *mut DiskInode;
-    pub fn iupdate(ip: *mut DiskInode);
-    pub fn idup(ip: *mut Inode) -> *mut Inode;
-    pub fn ilock(ip: *mut Inode);
-    pub fn iunlock(ip: *mut Inode);
-    pub fn iput(ip: *mut Inode);
-    pub fn iunlockput(ip: *mut DiskInode);
-    pub fn itrunc(ip: *mut DiskInode);
-    pub fn stati(ip: *mut Inode, st: *mut stat::Stat);
-    pub fn readi(ip: *mut Inode, user_dst: i32, dst: u64, off: u32, n: u32) -> i32;
-    pub fn writei(ip: *mut Inode, user_src: i32, src: u64, off: u32, n: u32) -> i32;
-    pub fn namei(path: *mut u8) -> *mut Inode;
-    // pub fn namecmp()
 }

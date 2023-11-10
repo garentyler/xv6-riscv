@@ -15,8 +15,8 @@ use crate::{
         },
     },
     fs::{
-        file::{fileclose, filedup, File, Inode},
-        idup, iput,
+        file::{fileclose, filedup, File},
+        inode::{idup, iput, Inode},
         log::LogOperation,
     },
     mem::{
