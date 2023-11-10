@@ -1,8 +1,6 @@
 use crate::sync::lock::Lock;
 use core::ffi::{c_char, CStr};
 
-pub use crate::panic;
-
 pub static PRINT_LOCK: Lock = Lock::new();
 
 /// Print out formatted text to the console.
@@ -40,7 +38,7 @@ macro_rules! uprint {
         // only uses the &mut reference immutably.
         let uart: *const Uart = &$crate::console::uart::UART0 as *const Uart;
         let uart: &mut Uart = unsafe { &mut *uart.cast_mut() };
-        
+
         let _ = core::write!(uart, $($arg)*);
     }};
 }
@@ -54,7 +52,6 @@ macro_rules! uprintln {
     }};
 }
 pub(crate) use uprintln;
-
 
 #[no_mangle]
 pub extern "C" fn printint(n: i32) {

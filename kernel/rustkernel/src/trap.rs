@@ -1,5 +1,5 @@
 use crate::{
-    arch::riscv::*,
+    arch::{self, riscv::*},
     println,
     proc::{
         cpu::Cpu,
@@ -49,7 +49,7 @@ pub unsafe fn devintr() -> i32 {
         // This is a supervisor external interrupt, via PLIC.
 
         // IRQ indicates which device interrupted.
-        let irq = plic::plic_claim();
+        let irq = arch::interrupt::handle_interrupt();
 
         if irq == UART0_IRQ {
             crate::console::uart::UART0.interrupt();
@@ -63,7 +63,7 @@ pub unsafe fn devintr() -> i32 {
         // interrupt at a time; tell the PLIC the device is
         // now allowed to interrupt again.
         if irq > 0 {
-            plic::plic_complete(irq);
+            arch::interrupt::complete_interrupt(irq);
         }
 
         1

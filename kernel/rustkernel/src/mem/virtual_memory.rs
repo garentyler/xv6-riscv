@@ -1,7 +1,21 @@
 use crate::{
     arch::riscv::{
-        memlayout::{KERNBASE, PHYSTOP, TRAMPOLINE},
-        *,
+        memlayout::{KERNBASE, PHYSTOP, TRAMPOLINE, UART0, VIRTIO0, QEMU_POWER},
+        plic::PLIC,
+        asm,
+        PGSIZE,
+        pg_round_down,
+        pg_round_up,
+        Pagetable,
+        PagetableEntry,
+        PTE_V,
+        PTE_R,
+        PTE_W,
+        PTE_X,
+        PTE_U,
+        MAXVA,
+        pte2pa,
+        make_satp,
     },
     mem::{
         kalloc::{kalloc, kfree},
@@ -33,10 +47,22 @@ pub unsafe fn kvmmake() -> Pagetable {
     kvmmap(pagetable, UART0 as u64, UART0 as u64, PGSIZE, PTE_R | PTE_W);
 
     // VirtIO MMIO disk interface
-    kvmmap(pagetable, VIRTIO0, VIRTIO0, PGSIZE, PTE_R | PTE_W);
+    kvmmap(
+        pagetable,
+        VIRTIO0 as u64,
+        VIRTIO0 as u64,
+        PGSIZE,
+        PTE_R | PTE_W,
+    );
 
     // PLIC
-    kvmmap(pagetable, PLIC, PLIC, 0x400000u64, PTE_R | PTE_W);
+    kvmmap(
+        pagetable,
+        PLIC as u64,
+        PLIC as u64,
+        0x400000u64,
+        PTE_R | PTE_W,
+    );
 
     let etext_addr = addr_of!(etext) as usize as u64;
 

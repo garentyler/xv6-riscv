@@ -24,7 +24,7 @@ mod trap;
 use crate::{proc::cpu::Cpu, sync::mutex::Mutex};
 use core::ffi::{c_char, CStr};
 
-pub(crate) use crate::console::printf::{print, println, uprint, uprintln};
+pub(crate) use crate::console::printf::{print, println, uprintln};
 
 pub static mut STARTED: bool = false;
 pub static PANICKED: Mutex<bool> = Mutex::new(false);
@@ -65,8 +65,8 @@ pub unsafe fn main() -> ! {
         mem::virtual_memory::kvminithart();
         proc::process::procinit();
         trap::trapinithart();
-        arch::riscv::plic::plicinit();
-        arch::riscv::plic::plicinithart();
+        arch::interrupt::init();
+        arch::interrupt::inithart();
         io::bio::binit();
         fs::iinit();
         fs::file::fileinit();
@@ -79,7 +79,7 @@ pub unsafe fn main() -> ! {
         }
         mem::virtual_memory::kvminithart();
         trap::trapinithart();
-        arch::riscv::plic::plicinithart();
+        arch::interrupt::inithart();
     }
 
     proc::scheduler::scheduler();

@@ -23,40 +23,17 @@ pub const QEMU_POWER: u64 = 0x100000u64;
 
 // QEMU puts UART registers here in physical memory.
 pub const UART0: usize = 0x10000000;
-pub const UART0_IRQ: i32 = 10;
+pub const UART0_IRQ: usize = 10;
 
 // Virtio MMIO interface
-pub const VIRTIO0: u64 = 0x10001000;
-pub const VIRTIO0_IRQ: i32 = 1;
+pub const VIRTIO0: usize = 0x10001000;
+pub const VIRTIO0_IRQ: usize = 1;
 
 // Core Local Interrupter (CLINT), which contains the timer.
 pub const CLINT: u64 = 0x2000000;
 pub const CLINT_MTIME: u64 = CLINT + 0xbff8;
 pub fn clint_mtimecmp(hartid: u64) -> u64 {
     CLINT + 0x4000 + (8 * hartid)
-}
-
-// QEMU puts platform-level interrupt controller (PLIC) here.
-pub const PLIC: u64 = 0x0c000000;
-pub const PLIC_PRIORITY: u64 = PLIC;
-pub const PLIC_PENDING: u64 = PLIC + 0x1000;
-pub fn plic_menable(hartid: u64) -> u64 {
-    PLIC + 0x2000 + (0x100 * hartid)
-}
-pub fn plic_senable(hartid: u64) -> u64 {
-    PLIC + 0x2080 + (0x100 * hartid)
-}
-pub fn plic_mpriority(hartid: u64) -> u64 {
-    PLIC + 0x200000 + (0x2000 * hartid)
-}
-pub fn plic_spriority(hartid: u64) -> u64 {
-    PLIC + 0x201000 + (0x2000 * hartid)
-}
-pub fn plic_mclaim(hartid: u64) -> u64 {
-    PLIC + 0x200004 + (0x2000 * hartid)
-}
-pub fn plic_sclaim(hartid: u64) -> u64 {
-    PLIC + 0x201004 + (0x2000 * hartid)
 }
 
 // The kernel expects there to be RAM
