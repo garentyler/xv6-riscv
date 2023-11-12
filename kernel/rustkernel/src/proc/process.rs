@@ -46,7 +46,6 @@ extern "C" {
     pub fn userinit();
     pub fn forkret();
     pub fn wait(addr: u64) -> i32;
-    pub fn proc_mapstacks(kpgtbl: Pagetable);
 }
 
 pub static NEXT_PID: AtomicI32 = AtomicI32::new(1);

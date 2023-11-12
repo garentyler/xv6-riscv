@@ -1,6 +1,6 @@
 use super::{
     asm,
-    mem::{make_satp, pte2pa},
+    mem::{make_satp, pte2pa, kstack},
     plic::PLIC,
     power::QEMU_POWER,
 };
@@ -17,7 +17,6 @@ use crate::{
         kalloc::{kalloc, kfree},
         memmove, memset,
     },
-    proc::process::proc_mapstacks,
 };
 use core::ptr::{addr_of, addr_of_mut, null_mut};
 
@@ -34,6 +33,9 @@ pub static mut KERNEL_PAGETABLE: Pagetable = null_mut();
 /// Make a direct-map page table for the kernel.
 pub unsafe fn kvmmake() -> Pagetable {
     let pagetable = kalloc() as Pagetable;
+    if pagetable.is_null() {
+        panic!("kalloc");
+    }
     memset(pagetable.cast(), 0, PAGE_SIZE as u32);
 
     // QEMU test interface used for power management.
@@ -105,7 +107,14 @@ pub unsafe fn kvmmake() -> Pagetable {
     );
 
     // Allocate and map a kernel stack for each process.
-    proc_mapstacks(pagetable);
+    for i in 0..crate::NPROC {
+        let page = kalloc();
+        if page.is_null() {
+            panic!("kalloc");
+        }
+        let virtual_addr = kstack(i) as u64;
+        kvmmap(pagetable, virtual_addr, page as u64, PAGE_SIZE as u64, PTE_R | PTE_W);
+    }
 
     pagetable
 }
