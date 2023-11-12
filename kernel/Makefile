@@ -2,7 +2,6 @@ R=rustkernel
 
 KERNEL_SOURCES = \
   entry.c \
-  proc.c \
   swtch.c \
   trampoline.c \
   bio.c \

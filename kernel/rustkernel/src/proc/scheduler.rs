@@ -1,7 +1,7 @@
 use super::{
     context::Context,
     cpu::Cpu,
-    process::{proc, Process, ProcessState},
+    process::{PROCESSES, Process, ProcessState},
 };
 use crate::{
     arch,
@@ -41,7 +41,7 @@ pub unsafe fn scheduler() -> ! {
         // Avoid deadlock by ensuring that devices can interrupt.
         arch::interrupt::enable_interrupts();
 
-        for p in &mut proc {
+        for p in PROCESSES.iter_mut() {
             let _guard = p.lock.lock();
             if p.state == ProcessState::Runnable {
                 // Switch to the chosen process. It's the process's job
@@ -114,7 +114,7 @@ pub unsafe fn sleep(chan: *mut c_void) {
 /// Must be called without any p.lock.
 #[no_mangle]
 pub unsafe extern "C" fn wakeup(chan: *mut c_void) {
-    for p in &mut proc {
+    for p in PROCESSES.iter_mut() {
         if !p.is_current() {
             let _guard = p.lock.lock();
             if p.state == ProcessState::Sleeping && p.chan == chan {

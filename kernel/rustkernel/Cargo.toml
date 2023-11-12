@@ -8,6 +8,7 @@ readme = "../../README.md"
 license = "LGPL-3.0-only"
 
 [dependencies]
+arrayvec = { version = "0.7.4", default-features = false }
 
 [lib]
 crate-type = ["staticlib"]

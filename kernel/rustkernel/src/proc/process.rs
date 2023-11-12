@@ -33,9 +33,9 @@ use core::{
     ptr::{addr_of, addr_of_mut, null_mut},
     sync::atomic::{AtomicI32, Ordering},
 };
+use arrayvec::ArrayVec;
 
 extern "C" {
-    pub static mut proc: [Process; crate::NPROC];
     // trampoline.S
     pub static mut trampoline: *mut c_char;
 }
@@ -47,14 +47,19 @@ pub static NEXT_PID: AtomicI32 = AtomicI32::new(1);
 /// Must be acquired before any p->lock.
 pub static mut WAIT_LOCK: Spinlock = Spinlock::new();
 pub static mut INITPROC: usize = 0;
+pub static mut PROCESSES: ArrayVec<Process, { crate::NPROC }> = ArrayVec::new_const();
 
 /// Initialize the proc table.
 pub unsafe fn procinit() {
-    for (i, p) in proc.iter_mut().enumerate() {
-        *p = Process::new();
+    let mut i = 0;
+    let processes_iter = core::iter::repeat_with(|| {
+        let mut p = Process::new();
         p.state = ProcessState::Unused;
         p.kernel_stack = kstack(i) as u64;
-    }
+        i += 1;
+        p
+    });
+    PROCESSES = processes_iter.take(crate::NPROC).collect();
 }
 /// Set up the first user process.
 pub unsafe fn userinit() {
@@ -190,7 +195,7 @@ impl Process {
     /// If there are no free procs, or a memory allocation fails, return an error.
     pub unsafe fn alloc() -> Result<&'static mut Process, ProcessError> {
         let mut index: Option<usize> = None;
-        for (i, p) in &mut proc.iter_mut().enumerate() {
+        for (i, p) in PROCESSES.iter_mut().enumerate() {
             p.lock.lock_unguarded();
             if p.state == ProcessState::Unused {
                 index = Some(i);
@@ -203,7 +208,7 @@ impl Process {
             return Err(ProcessError::MaxProcesses);
         };
 
-        let p: &mut Process = &mut proc[index];
+        let p: &mut Process = &mut PROCESSES[index];
         p.pid = Process::alloc_pid();
         p.state = ProcessState::Used;
 
@@ -390,7 +395,7 @@ impl Process {
     /// Pass p's abandoned children to init.
     /// Caller must hold WAIT_LOCK.
     pub unsafe fn reparent(&self) {
-        for p in proc.iter_mut() {
+        for p in PROCESSES.iter_mut() {
             if p.parent == addr_of!(*self).cast_mut() {
                 p.parent = INITPROC as *mut Process;
                 wakeup((INITPROC as *mut Process).cast());
@@ -447,7 +452,7 @@ impl Process {
             // Scan through the table looking for exited children.
             let mut has_children = false;
 
-            for p in &mut proc {
+            for p in PROCESSES.iter_mut() {
                 if p.parent == addr_of_mut!(*self) {
                     has_children = true;
 
@@ -496,7 +501,7 @@ impl Process {
     /// The victim won't exit until it tries to return
     /// to user space (see usertrap() in trap.c).
     pub unsafe fn kill(pid: i32) -> bool {
-        for p in &mut proc {
+        for p in PROCESSES.iter_mut() {
             let _guard = p.lock.lock();
 
             if p.pid == pid {
@@ -538,15 +543,6 @@ pub extern "C" fn myproc() -> *mut Process {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn allocproc() -> *mut Process {
-    if let Ok(process) = Process::alloc() {
-        process as *mut Process
-    } else {
-        null_mut()
-    }
-}
-
-#[no_mangle]
 pub unsafe extern "C" fn proc_pagetable(p: *mut Process) -> Pagetable {
     (*p).alloc_pagetable().unwrap_or(null_mut())
 }
@@ -561,7 +557,7 @@ pub unsafe extern "C" fn proc_freepagetable(pagetable: Pagetable, size: u64) {
 /// No lock to avoid wedging a stuck machine further.
 pub unsafe fn procdump() {
     uprintln!("\nprocdump:");
-    for p in &proc {
+    for p in PROCESSES.iter() {
         if p.state != ProcessState::Unused {
             uprintln!("    {}: {:?}", p.pid, p.state);
         }
