@@ -36,23 +36,20 @@ use core::{
 
 extern "C" {
     pub static mut proc: [Process; crate::NPROC];
-    pub static mut initproc: *mut Process;
-    /// Helps ensure that wakeups of wait()ing
-    /// parents are not lost. Helps obey the
-    /// memory model when using p->parent.
-    /// Must be acquired before any p->lock.
-    pub static mut wait_lock: Spinlock;
     // trampoline.S
     pub static mut trampoline: *mut c_char;
-
-    // pub fn userinit();
 }
 
 pub static NEXT_PID: AtomicI32 = AtomicI32::new(1);
+/// Helps ensure that wakeups of wait()ing
+/// parents are not lost. Helps obey the
+/// memory model when using p->parent.
+/// Must be acquired before any p->lock.
+pub static mut WAIT_LOCK: Spinlock = Spinlock::new();
+pub static mut INITPROC: usize = 0;
 
 /// Initialize the proc table.
 pub unsafe fn procinit() {
-    wait_lock = Spinlock::new();
     for (i, p) in proc.iter_mut().enumerate() {
         *p = Process::new();
         p.state = ProcessState::Unused;
@@ -62,7 +59,7 @@ pub unsafe fn procinit() {
 /// Set up the first user process.
 pub unsafe fn userinit() {
     let p = Process::alloc().unwrap();
-    initproc = addr_of_mut!(*p);
+    INITPROC = addr_of_mut!(*p) as usize;
 
     let initcode: &[u8] = &[
         0x17, 0x05, 0x00, 0x00, 0x13, 0x05, 0x45, 0x02,
@@ -129,7 +126,7 @@ pub struct Process {
     /// Process ID
     pub pid: i32,
 
-    // wait_lock msut be held when using this:
+    // WAIT_LOCK must be held when using this:
     /// Parent process
     pub parent: *mut Process,
 
@@ -181,7 +178,7 @@ impl Process {
         addr_of!(*self).cast_mut() == Cpu::current().proc
     }
     pub fn is_initproc(&self) -> bool {
-        addr_of!(*self).cast_mut() == unsafe { initproc }
+        addr_of!(*self) as usize == unsafe { INITPROC }
     }
 
     pub fn alloc_pid() -> i32 {
@@ -362,7 +359,7 @@ impl Process {
 
         child.lock.unlock();
         {
-            let _guard = wait_lock.lock();
+            let _guard = WAIT_LOCK.lock();
             child.parent = addr_of!(*parent).cast_mut();
         }
         {
@@ -391,12 +388,12 @@ impl Process {
     }
 
     /// Pass p's abandoned children to init.
-    /// Caller must hold wait_lock.
+    /// Caller must hold WAIT_LOCK.
     pub unsafe fn reparent(&self) {
         for p in proc.iter_mut() {
             if p.parent == addr_of!(*self).cast_mut() {
-                p.parent = initproc;
-                wakeup(initproc.cast());
+                p.parent = INITPROC as *mut Process;
+                wakeup((INITPROC as *mut Process).cast());
             }
         }
     }
@@ -424,7 +421,7 @@ impl Process {
         self.current_dir = null_mut();
 
         {
-            let _guard = wait_lock.lock();
+            let _guard = WAIT_LOCK.lock();
 
             // Give any children to init.
             self.reparent();
@@ -444,7 +441,7 @@ impl Process {
 
     /// Wait for a child process to exit, and return its pid.
     pub unsafe fn wait_for_child(&mut self, addr: u64) -> Result<i32, ProcessError> {
-        let guard = wait_lock.lock();
+        let guard = WAIT_LOCK.lock();
 
         loop {
             // Scan through the table looking for exited children.
