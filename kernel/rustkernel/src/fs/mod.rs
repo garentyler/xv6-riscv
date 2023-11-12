@@ -83,6 +83,7 @@ pub struct DirectoryEntry {
     pub name: [u8; DIRSIZ],
 }
 
+pub static mut FS_INITIALIZED: bool = false;
 extern "C" {
     pub fn fsinit(dev: i32);
 }

@@ -9,15 +9,17 @@ use super::{
 use crate::{
     arch::{
         mem::{kstack, Pagetable, PAGE_SIZE, PTE_R, PTE_W, PTE_X, TRAMPOLINE, TRAPFRAME},
-        trap::InterruptBlocker,
+        trap::{usertrapret, InterruptBlocker},
         virtual_memory::{
             copyout, mappages, uvmalloc, uvmcopy, uvmcreate, uvmdealloc, uvmfree, uvmunmap,
         },
     },
     fs::{
         file::{fileclose, filedup, File},
+        fsinit,
         inode::{idup, iput, Inode},
         log::LogOperation,
+        FS_INITIALIZED,
     },
     mem::{
         kalloc::{kalloc, kfree},
@@ -150,6 +152,9 @@ impl Process {
     pub fn is_current(&self) -> bool {
         addr_of!(*self).cast_mut() == Cpu::current().proc
     }
+    pub fn is_initproc(&self) -> bool {
+        addr_of!(*self).cast_mut() == unsafe { initproc }
+    }
 
     pub fn alloc_pid() -> i32 {
         NEXT_PID.fetch_add(1, Ordering::SeqCst)
@@ -200,7 +205,7 @@ impl Process {
             0,
             core::mem::size_of::<Context>() as u32,
         );
-        p.context.ra = forkret as usize as u64;
+        p.context.ra = Process::forkret as usize as u64;
         p.context.sp = p.kernel_stack + PAGE_SIZE as u64;
 
         Ok(p)
@@ -340,6 +345,23 @@ impl Process {
         Ok(pid)
     }
 
+    /// A fork child's very first scheduling by
+    /// scheduler() will swtch to forkret.
+    pub unsafe fn forkret() -> ! {
+        // Still holding p->lock from scheduler.
+        Process::current().unwrap().lock.unlock();
+
+        if !FS_INITIALIZED {
+            // File system initialization must be run in the context of a
+            // regular process (e.g., because it calls sleep), and thus
+            // cannot be run from main().
+            FS_INITIALIZED = true;
+            fsinit(crate::ROOTDEV as i32);
+        }
+
+        usertrapret()
+    }
+
     /// Pass p's abandoned children to init.
     /// Caller must hold wait_lock.
     pub unsafe fn reparent(&self) {
@@ -355,7 +377,7 @@ impl Process {
     /// An exited process remains in the zombie state
     /// until its parent calls wait().
     pub unsafe fn exit(&mut self, status: i32) -> ! {
-        if addr_of_mut!(*self) == initproc {
+        if self.is_initproc() {
             panic!("init exiting");
         }
 

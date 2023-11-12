@@ -1,7 +1,7 @@
 //! Architecture-agnostic trap handling.
 
 #[cfg(target_arch = "riscv64")]
-pub use super::riscv::trap::trapinithart as inithart;
+pub use super::riscv::trap::{trapinithart as inithart, usertrapret};
 
 use super::interrupt;
 use crate::proc::cpu::Cpu;

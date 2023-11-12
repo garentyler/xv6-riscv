@@ -100,7 +100,7 @@ pub unsafe fn devintr() -> i32 {
 
 /// Return to user space
 #[no_mangle]
-pub unsafe extern "C" fn usertrapret() {
+pub unsafe extern "C" fn usertrapret() -> ! {
     let proc = Process::current().unwrap();
 
     // We're about to switch the destination of traps from
@@ -147,7 +147,7 @@ pub unsafe extern "C" fn usertrapret() {
         TRAMPOLINE + (addr_of!(userret) as usize) - (addr_of!(trampoline) as usize);
     let trampoline_userret = trampoline_userret as *const ();
     // Rust's most dangerous function: core::mem::transmute
-    let trampoline_userret = core::mem::transmute::<*const (), fn(u64)>(trampoline_userret);
+    let trampoline_userret = core::mem::transmute::<*const (), fn(u64) -> !>(trampoline_userret);
     trampoline_userret(satp)
 }
 
