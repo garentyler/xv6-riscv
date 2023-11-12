@@ -8,7 +8,7 @@ use super::{
 };
 use crate::{
     arch::{
-        mem::{Pagetable, PAGE_SIZE, PTE_R, PTE_W, PTE_X, TRAMPOLINE, TRAPFRAME},
+        mem::{kstack, Pagetable, PAGE_SIZE, PTE_R, PTE_W, PTE_X, TRAMPOLINE, TRAPFRAME},
         trap::InterruptBlocker,
         virtual_memory::{
             copyout, mappages, uvmalloc, uvmcopy, uvmcreate, uvmdealloc, uvmfree, uvmunmap,
@@ -35,8 +35,6 @@ use core::{
 extern "C" {
     pub static mut proc: [Process; crate::NPROC];
     pub static mut initproc: *mut Process;
-    pub static mut nextpid: i32;
-    pub static mut pid_lock: Spinlock;
     /// Helps ensure that wakeups of wait()ing
     /// parents are not lost. Helps obey the
     /// memory model when using p->parent.
@@ -45,17 +43,23 @@ extern "C" {
     // trampoline.S
     pub static mut trampoline: *mut c_char;
 
-    pub fn procinit();
     pub fn userinit();
     pub fn forkret();
-    // pub fn fork() -> i32;
-    // pub fn exit(status: i32) -> !;
     pub fn wait(addr: u64) -> i32;
-    // pub fn procdump();
     pub fn proc_mapstacks(kpgtbl: Pagetable);
 }
 
 pub static NEXT_PID: AtomicI32 = AtomicI32::new(1);
+
+/// Initialize the proc table.
+pub unsafe fn procinit() {
+    wait_lock = Spinlock::new();
+    for (i, p) in proc.iter_mut().enumerate() {
+        *p = Process::new();
+        p.state = ProcessState::Unused;
+        p.kernel_stack = kstack(i) as u64;
+    }
+}
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, PartialEq)]

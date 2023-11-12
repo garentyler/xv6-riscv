@@ -7,12 +7,8 @@
 #include "defs.h"
 
 struct proc proc[NPROC];
-
 struct proc *initproc;
-
 extern void forkret(void);
-
-extern char trampoline[]; // trampoline.S
 
 // helps ensure that wakeups of wait()ing
 // parents are not lost. helps obey the
@@ -37,33 +33,7 @@ proc_mapstacks(pagetable_t kpgtbl)
   }
 }
 
-// initialize the proc table.
-void
-procinit(void)
-{
-  struct proc *p;
-
-  initlock(&wait_lock, "wait_lock");
-  for(p = proc; p < &proc[NPROC]; p++) {
-      initlock(&p->lock, "proc");
-      p->state = UNUSED;
-      p->kstack = KSTACK((int) (p - proc));
-  }
-}
-
-// Look in the process table for an UNUSED proc.
-// If found, initialize state required to run in the kernel,
-// and return with p->lock held.
-// If there are no free procs, or a memory allocation fails, return 0.
 struct proc *allocproc(void);
-
-// Create a user page table for a given process, with no user memory,
-// but with trampoline and trapframe pages.
-pagetable_t proc_pagetable(struct proc *p);
-
-// Free a process's page table, and free the
-// physical memory it refers to.
-void proc_freepagetable(pagetable_t pagetable, uint64 sz);
 
 // a user program that calls exec("/init")
 // assembled from ../user/initcode.S
@@ -123,10 +93,6 @@ forkret(void)
 
   usertrapret();
 }
-
-// Atomically release lock and sleep on chan.
-// Reacquires lock when awakened.
-void sleep_lock(void *chan, struct spinlock *lk);
 
 // Copy to either a user address, or kernel address,
 // depending on usr_dst.

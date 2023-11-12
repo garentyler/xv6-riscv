@@ -29,8 +29,8 @@ pub mod mem {
     pub use super::riscv::{
         asm::sfence_vma as flush_cached_pages,
         mem::{
-            Pagetable, PagetableEntry, KERNEL_BASE, PAGE_SIZE, PHYSICAL_END, PTE_R, PTE_U, PTE_V,
-            PTE_W, PTE_X, TRAMPOLINE, TRAPFRAME, VIRTUAL_MAX,
+            kstack, Pagetable, PagetableEntry, KERNEL_BASE, PAGE_SIZE, PHYSICAL_END, PTE_R, PTE_U,
+            PTE_V, PTE_W, PTE_X, TRAMPOLINE, TRAPFRAME, VIRTUAL_MAX,
         },
     };
 
