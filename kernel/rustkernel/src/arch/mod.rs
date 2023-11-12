@@ -48,7 +48,7 @@ pub mod virtual_memory {
     pub use super::riscv::virtual_memory::{
         copyin, copyinstr, copyout, either_copyin, either_copyout, kvminit as init,
         kvminithart as inithart, mappages, uvmalloc, uvmcopy, uvmcreate, uvmdealloc, uvmfree,
-        uvmunmap,
+        uvmunmap, uvmfirst
     };
 }
 

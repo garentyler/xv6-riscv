@@ -11,13 +11,13 @@ use crate::{
         mem::{kstack, Pagetable, PAGE_SIZE, PTE_R, PTE_W, PTE_X, TRAMPOLINE, TRAPFRAME},
         trap::{usertrapret, InterruptBlocker},
         virtual_memory::{
-            copyout, mappages, uvmalloc, uvmcopy, uvmcreate, uvmdealloc, uvmfree, uvmunmap,
+            copyout, mappages, uvmalloc, uvmcopy, uvmcreate, uvmdealloc, uvmfree, uvmunmap, uvmfirst,
         },
     },
     fs::{
         file::{fileclose, filedup, File},
         fsinit,
-        inode::{idup, iput, Inode},
+        inode::{idup, iput, namei, Inode},
         log::LogOperation,
         FS_INITIALIZED,
     },
@@ -29,7 +29,7 @@ use crate::{
     uprintln,
 };
 use core::{
-    ffi::{c_char, c_void},
+    ffi::{c_char, c_void, CStr},
     ptr::{addr_of, addr_of_mut, null_mut},
     sync::atomic::{AtomicI32, Ordering},
 };
@@ -45,9 +45,7 @@ extern "C" {
     // trampoline.S
     pub static mut trampoline: *mut c_char;
 
-    pub fn userinit();
-    pub fn forkret();
-    pub fn wait(addr: u64) -> i32;
+    // pub fn userinit();
 }
 
 pub static NEXT_PID: AtomicI32 = AtomicI32::new(1);
@@ -60,6 +58,36 @@ pub unsafe fn procinit() {
         p.state = ProcessState::Unused;
         p.kernel_stack = kstack(i) as u64;
     }
+}
+/// Set up the first user process.
+pub unsafe fn userinit() {
+    let p = Process::alloc().unwrap();
+    initproc = addr_of_mut!(*p);
+
+    let initcode: &[u8] = &[
+        0x17, 0x05, 0x00, 0x00, 0x13, 0x05, 0x45, 0x02,
+        0x97, 0x05, 0x00, 0x00, 0x93, 0x85, 0x35, 0x02,
+        0x93, 0x08, 0x70, 0x00, 0x73, 0x00, 0x00, 0x00,
+        0x93, 0x08, 0x20, 0x00, 0x73, 0x00, 0x00, 0x00,
+        0xef, 0xf0, 0x9f, 0xff, 0x2f, 0x69, 0x6e, 0x69,
+        0x74, 0x00, 0x00, 0x24, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00
+    ];
+
+    // Allocate one user page and copy initcode's
+    // instructions and data into it.
+    uvmfirst(p.pagetable, initcode.as_ptr().cast_mut(), initcode.len() as u32);
+    p.memory_allocated = PAGE_SIZE as u64;
+
+    // Prepare for the very first "return" from kernel to user.
+    // User program counter
+    (*p.trapframe).epc = 0;
+    // User stack pointer
+    (*p.trapframe).sp = PAGE_SIZE as u64;
+
+    p.current_dir = namei(CStr::from_bytes_with_nul(b"/\0").unwrap().as_ptr().cast_mut().cast());
+    p.state = ProcessState::Runnable;
+    p.lock.unlock();
 }
 
 #[repr(C)]
