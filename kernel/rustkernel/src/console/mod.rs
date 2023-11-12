@@ -11,6 +11,7 @@
 pub mod printf;
 
 use crate::{
+    arch::virtual_memory::{either_copyin, either_copyout},
     fs::file::{devsw, CONSOLE},
     hardware::uart::Uart,
     proc::{
@@ -19,12 +20,7 @@ use crate::{
     },
     sync::mutex::Mutex,
 };
-use core::{ffi::c_void, ptr::addr_of_mut};
-
-extern "C" {
-    fn either_copyin(dst: *mut c_void, user_src: i32, src: u64, len: u64) -> i32;
-    fn either_copyout(user_dst: i32, dst: u64, src: *mut c_void, len: u64) -> i32;
-}
+use core::ptr::addr_of_mut;
 
 pub static UART0: &Uart = &crate::hardware::UARTS[0].1;
 

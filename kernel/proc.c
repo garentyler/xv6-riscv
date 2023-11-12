@@ -8,7 +8,6 @@
 
 struct proc proc[NPROC];
 struct proc *initproc;
-extern void forkret(void);
 
 // helps ensure that wakeups of wait()ing
 // parents are not lost. helps obey the
@@ -75,34 +74,4 @@ forkret(void)
   }
 
   usertrapret();
-}
-
-// Copy to either a user address, or kernel address,
-// depending on usr_dst.
-// Returns 0 on success, -1 on error.
-int
-either_copyout(int user_dst, uint64 dst, void *src, uint64 len)
-{
-  struct proc *p = myproc();
-  if(user_dst){
-    return copyout(p->pagetable, dst, src, len);
-  } else {
-    memmove((char *)dst, src, len);
-    return 0;
-  }
-}
-
-// Copy from either a user address, or kernel address,
-// depending on usr_src.
-// Returns 0 on success, -1 on error.
-int
-either_copyin(void *dst, int user_src, uint64 src, uint64 len)
-{
-  struct proc *p = myproc();
-  if(user_src){
-    return copyin(p->pagetable, dst, src, len);
-  } else {
-    memmove(dst, (char*)src, len);
-    return 0;
-  }
 }

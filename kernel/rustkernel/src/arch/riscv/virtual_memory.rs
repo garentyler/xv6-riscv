@@ -1,6 +1,6 @@
 use super::{
     asm,
-    mem::{make_satp, pte2pa, kstack},
+    mem::{kstack, make_satp, pte2pa},
     plic::PLIC,
     power::QEMU_POWER,
 };
@@ -17,6 +17,7 @@ use crate::{
         kalloc::{kalloc, kfree},
         memmove, memset,
     },
+    proc::process::Process,
 };
 use core::ptr::{addr_of, addr_of_mut, null_mut};
 
@@ -25,6 +26,9 @@ extern "C" {
     pub static etext: [u8; 0];
     /// trampoline.S
     pub static trampoline: [u8; 0];
+
+    // pub fn either_copyin(dst: *mut u8, user_src: i32, src: u64, len: u64) -> i32;
+    // pub fn either_copyout(user_dst: i32, dst: u64, src: *mut u8, len: u64) -> i32;
 }
 
 /// The kernel's pagetable.
@@ -113,7 +117,13 @@ pub unsafe fn kvmmake() -> Pagetable {
             panic!("kalloc");
         }
         let virtual_addr = kstack(i) as u64;
-        kvmmap(pagetable, virtual_addr, page as u64, PAGE_SIZE as u64, PTE_R | PTE_W);
+        kvmmap(
+            pagetable,
+            virtual_addr,
+            page as u64,
+            PAGE_SIZE as u64,
+            PTE_R | PTE_W,
+        );
     }
 
     pagetable
@@ -557,6 +567,36 @@ pub unsafe extern "C" fn copyin(
         src_virtual_addr = va0 + PAGE_SIZE as u64;
     }
     0
+}
+
+// Copy to either a user address, or kernel address,
+// depending on usr_dst.
+// Returns 0 on success, -1 on error.
+#[no_mangle]
+pub unsafe extern "C" fn either_copyout(user_dst: i32, dst: u64, src: *mut u8, len: u64) -> i32 {
+    let p = Process::current().unwrap();
+
+    if user_dst > 0 {
+        copyout(p.pagetable, dst, src, len)
+    } else {
+        memmove(dst as *mut u8, src, len as u32);
+        0
+    }
+}
+
+// Copy from either a user address, or kernel address,
+// depending on usr_src.
+// Returns 0 on success, -1 on error.
+#[no_mangle]
+pub unsafe extern "C" fn either_copyin(dst: *mut u8, user_src: i32, src: u64, len: u64) -> i32 {
+    let p = Process::current().unwrap();
+
+    if user_src > 0 {
+        copyin(p.pagetable, dst, src, len)
+    } else {
+        memmove(dst, src as *mut u8, len as u32);
+        0
+    }
 }
 
 /// Copy a null-terminated string from user to kernel.
