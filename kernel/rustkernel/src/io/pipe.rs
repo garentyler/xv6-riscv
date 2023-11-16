@@ -99,7 +99,7 @@ impl Pipe {
                 guard.sleep(addr_of!(self.bytes_written).cast_mut().cast());
             } else {
                 let mut b = 0u8;
-                if copyin(proc.pagetable, addr_of_mut!(b), addr + i as u64, 1) == -1 {
+                if copyin(proc.pagetable, addr_of_mut!(b), addr as usize + i, 1) == -1 {
                     break;
                 }
                 let index = self.bytes_written as usize % PIPESIZE;
@@ -134,7 +134,7 @@ impl Pipe {
             }
             let b = self.data[self.bytes_read as usize % PIPESIZE];
             self.as_mut().bytes_read += 1;
-            if copyout(proc.pagetable, addr + i as u64, addr_of!(b).cast_mut(), 1) == -1 {
+            if copyout(proc.pagetable, addr as usize + i, addr_of!(b).cast_mut(), 1) == -1 {
                 break;
             }
             i += 1;

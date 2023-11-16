@@ -277,8 +277,8 @@ pub unsafe extern "C" fn fetchaddr(addr: u64, ip: *mut u64) -> i32 {
         || copyin(
             proc.pagetable,
             ip.cast(),
-            addr,
-            size_of::<*mut u64>() as u64,
+            addr as usize,
+            size_of::<*mut u64>(),
         ) != 0
     {
         -1
@@ -294,7 +294,7 @@ pub unsafe extern "C" fn fetchaddr(addr: u64, ip: *mut u64) -> i32 {
 pub unsafe extern "C" fn fetchstr(addr: u64, buf: *mut u8, max: i32) -> i32 {
     let proc = Process::current().unwrap();
 
-    if copyinstr(proc.pagetable, buf, addr, max as u64) < 0 {
+    if copyinstr(proc.pagetable, buf, addr as usize, max as u32 as usize) < 0 {
         -1
     } else {
         strlen(buf.cast())

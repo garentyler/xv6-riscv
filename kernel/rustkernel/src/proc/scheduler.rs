@@ -1,7 +1,7 @@
 use super::{
     context::Context,
     cpu::Cpu,
-    process::{PROCESSES, Process, ProcessState},
+    process::{Process, ProcessState, PROCESSES},
 };
 use crate::{
     arch,

@@ -87,7 +87,13 @@ pub fn consolewrite(user_src: i32, src: u64, n: i32) -> i32 {
         for i in 0..n {
             let mut c = 0i8;
 
-            if either_copyin(addr_of_mut!(c).cast(), user_src, src + i as u64, 1) == -1 {
+            if either_copyin(
+                addr_of_mut!(c).cast(),
+                user_src,
+                src as usize + i as u32 as usize,
+                1,
+            ) == -1
+            {
                 return i;
             } else {
                 UART0.write_byte_buffered(c as u8);
@@ -137,7 +143,7 @@ pub fn consoleread(user_dst: i32, mut dst: u64, mut n: i32) -> i32 {
 
             // Copy the input byte to the user-space buffer.
             cbuf = c;
-            if either_copyout(user_dst, dst, addr_of_mut!(cbuf).cast(), 1) == -1 {
+            if either_copyout(user_dst, dst as usize, addr_of_mut!(cbuf).cast(), 1) == -1 {
                 break;
             }
 

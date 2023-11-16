@@ -11,7 +11,8 @@ use crate::{
         mem::{kstack, Pagetable, PAGE_SIZE, PTE_R, PTE_W, PTE_X, TRAMPOLINE, TRAPFRAME},
         trap::{usertrapret, InterruptBlocker},
         virtual_memory::{
-            copyout, mappages, uvmalloc, uvmcopy, uvmcreate, uvmdealloc, uvmfree, uvmunmap, uvmfirst,
+            copyout, mappages, uvmalloc, uvmcopy, uvmcreate, uvmdealloc, uvmfirst, uvmfree,
+            uvmunmap,
         },
     },
     fs::{
@@ -28,12 +29,12 @@ use crate::{
     sync::spinlock::Spinlock,
     uprintln,
 };
+use arrayvec::ArrayVec;
 use core::{
     ffi::{c_char, c_void, CStr},
     ptr::{addr_of, addr_of_mut, null_mut},
     sync::atomic::{AtomicI32, Ordering},
 };
-use arrayvec::ArrayVec;
 
 extern "C" {
     // trampoline.S
@@ -67,18 +68,15 @@ pub unsafe fn userinit() {
     INITPROC = addr_of_mut!(*p) as usize;
 
     let initcode: &[u8] = &[
-        0x17, 0x05, 0x00, 0x00, 0x13, 0x05, 0x45, 0x02,
-        0x97, 0x05, 0x00, 0x00, 0x93, 0x85, 0x35, 0x02,
-        0x93, 0x08, 0x70, 0x00, 0x73, 0x00, 0x00, 0x00,
-        0x93, 0x08, 0x20, 0x00, 0x73, 0x00, 0x00, 0x00,
-        0xef, 0xf0, 0x9f, 0xff, 0x2f, 0x69, 0x6e, 0x69,
-        0x74, 0x00, 0x00, 0x24, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00
+        0x17, 0x05, 0x00, 0x00, 0x13, 0x05, 0x45, 0x02, 0x97, 0x05, 0x00, 0x00, 0x93, 0x85, 0x35,
+        0x02, 0x93, 0x08, 0x70, 0x00, 0x73, 0x00, 0x00, 0x00, 0x93, 0x08, 0x20, 0x00, 0x73, 0x00,
+        0x00, 0x00, 0xef, 0xf0, 0x9f, 0xff, 0x2f, 0x69, 0x6e, 0x69, 0x74, 0x00, 0x00, 0x24, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     ];
 
     // Allocate one user page and copy initcode's
     // instructions and data into it.
-    uvmfirst(p.pagetable, initcode.as_ptr().cast_mut(), initcode.len() as u32);
+    uvmfirst(p.pagetable, initcode.as_ptr().cast_mut(), initcode.len());
     p.memory_allocated = PAGE_SIZE as u64;
 
     // Prepare for the very first "return" from kernel to user.
@@ -87,7 +85,13 @@ pub unsafe fn userinit() {
     // User stack pointer
     (*p.trapframe).sp = PAGE_SIZE as u64;
 
-    p.current_dir = namei(CStr::from_bytes_with_nul(b"/\0").unwrap().as_ptr().cast_mut().cast());
+    p.current_dir = namei(
+        CStr::from_bytes_with_nul(b"/\0")
+            .unwrap()
+            .as_ptr()
+            .cast_mut()
+            .cast(),
+    );
     p.state = ProcessState::Runnable;
     p.lock.unlock();
 }
@@ -233,7 +237,7 @@ impl Process {
         memset(
             addr_of_mut!(p.context).cast(),
             0,
-            core::mem::size_of::<Context>() as u32,
+            core::mem::size_of::<Context>(),
         );
         p.context.ra = Process::forkret as usize as u64;
         p.context.sp = p.kernel_stack + PAGE_SIZE as u64;
@@ -268,8 +272,8 @@ impl Process {
         if num_bytes > 0 {
             size = uvmalloc(
                 self.pagetable,
-                size,
-                size.wrapping_add(num_bytes as u64),
+                size as usize,
+                size.wrapping_add(num_bytes as u64) as usize,
                 PTE_W,
             );
 
@@ -277,7 +281,11 @@ impl Process {
                 return Err(ProcessError::Allocation);
             }
         } else if num_bytes < 0 {
-            size = uvmdealloc(self.pagetable, size, size.wrapping_add(num_bytes as u64));
+            size = uvmdealloc(
+                self.pagetable,
+                size as usize,
+                size.wrapping_add(num_bytes as u64) as usize,
+            );
         }
 
         self.memory_allocated = size;
@@ -299,9 +307,9 @@ impl Process {
         // to and from user space, so not PTE_U.
         if mappages(
             pagetable,
-            TRAMPOLINE as u64,
-            PAGE_SIZE as u64,
-            addr_of!(trampoline) as usize as u64,
+            TRAMPOLINE,
+            PAGE_SIZE,
+            addr_of!(trampoline) as usize,
             PTE_R | PTE_X,
         ) < 0
         {
@@ -312,13 +320,13 @@ impl Process {
         // Map the trapframe page just below the trampoline page for trampoline.S.
         if mappages(
             pagetable,
-            TRAPFRAME as u64,
-            PAGE_SIZE as u64,
-            self.trapframe as usize as u64,
+            TRAPFRAME,
+            PAGE_SIZE,
+            self.trapframe as usize,
             PTE_R | PTE_W,
         ) < 0
         {
-            uvmunmap(pagetable, TRAMPOLINE as u64, 1, 0);
+            uvmunmap(pagetable, TRAMPOLINE, 1, false);
             uvmfree(pagetable, 0);
             return Err(ProcessError::Allocation);
         }
@@ -327,9 +335,9 @@ impl Process {
     }
     /// Free a process's pagetable and free the physical memory it refers to.
     pub unsafe fn free_pagetable(pagetable: Pagetable, size: usize) {
-        uvmunmap(pagetable, TRAMPOLINE as u64, 1, 0);
-        uvmunmap(pagetable, TRAPFRAME as u64, 1, 0);
-        uvmfree(pagetable, size as u64)
+        uvmunmap(pagetable, TRAMPOLINE, 1, false);
+        uvmunmap(pagetable, TRAPFRAME, 1, false);
+        uvmfree(pagetable, size)
     }
 
     /// Create a new process, copying the parent.
@@ -339,7 +347,12 @@ impl Process {
         let child = Process::alloc()?;
 
         // Copy user memory from parent to child.
-        if uvmcopy(parent.pagetable, child.pagetable, parent.memory_allocated) < 0 {
+        if uvmcopy(
+            parent.pagetable,
+            child.pagetable,
+            parent.memory_allocated as usize,
+        ) < 0
+        {
             child.free();
             child.lock.unlock();
             return Err(ProcessError::Allocation);
@@ -466,9 +479,9 @@ impl Process {
                         if addr != 0
                             && copyout(
                                 self.pagetable,
-                                addr,
+                                addr as usize,
                                 addr_of_mut!(p.exit_status).cast(),
-                                core::mem::size_of::<i32>() as u64,
+                                core::mem::size_of::<i32>(),
                             ) < 0
                         {
                             p.lock.unlock();

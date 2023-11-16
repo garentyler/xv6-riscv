@@ -1,7 +1,7 @@
 pub mod kalloc;
 
 #[no_mangle]
-pub unsafe extern "C" fn memset(dst: *mut u8, data: i32, max_bytes: u32) -> *mut u8 {
+pub unsafe extern "C" fn memset(dst: *mut u8, data: u8, max_bytes: usize) -> *mut u8 {
     for i in 0..max_bytes {
         *dst.add(i as usize) = data as u8;
     }

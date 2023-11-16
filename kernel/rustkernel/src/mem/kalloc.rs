@@ -59,7 +59,7 @@ pub unsafe extern "C" fn kfree(pa: *mut u8) {
         panic!("kfree");
     }
 
-    memset(pa, 0, PAGE_SIZE as u32);
+    memset(pa, 0, PAGE_SIZE);
 
     let run: *mut Run = pa.cast();
 
@@ -82,7 +82,7 @@ pub unsafe extern "C" fn kalloc() -> *mut u8 {
     }
 
     if !run.is_null() {
-        memset(run.cast(), 0, PAGE_SIZE as u32);
+        memset(run.cast(), 0, PAGE_SIZE);
     }
 
     run as *mut u8

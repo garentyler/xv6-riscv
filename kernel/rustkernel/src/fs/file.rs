@@ -147,9 +147,9 @@ pub unsafe fn filestat(file: *mut File, addr: u64) -> i32 {
 
         if copyout(
             proc.pagetable,
-            addr,
+            addr as usize,
             addr_of_mut!(stat).cast(),
-            core::mem::size_of::<Stat>() as u64,
+            core::mem::size_of::<Stat>(),
         ) < 0
         {
             return -1;
