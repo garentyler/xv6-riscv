@@ -30,16 +30,18 @@ pub(crate) use println;
 /// Does not use any locks.
 macro_rules! uprint {
     ($($arg:tt)*) => {{
-        use $crate::hardware::uart::Uart;
+        // use $crate::hardware::uart::{BufferedUart, Uart, UartWriter};
         use core::fmt::Write;
 
-        // Do some casts to get a mutable reference.
-        // Safe because Uart's core::fmt::Write implementation
-        // only uses the &mut reference immutably.
-        let uart: *const Uart = &$crate::hardware::UARTS[0].1 as *const Uart;
-        let uart: &mut Uart = unsafe { &mut *uart.cast_mut() };
+        // let mut uart: UartWriter = $crate::console::UART0.writer_unbuffered();
 
-        let _ = core::write!(uart, $($arg)*);
+        // let uart: &BufferedUart = &$crate::console::UART0;
+        // let uart: &Uart = &**uart;
+        // let mut uart: UartWriter = uart.writer();
+        //
+        let _ = core::write!($crate::console::UART0.writer_unbuffered(), $($arg)*);
+
+        // let _ = core::write!(uart, $($arg)*);
     }};
 }
 pub(crate) use uprint;

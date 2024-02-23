@@ -43,13 +43,7 @@ pub unsafe fn kvmmake() -> Pagetable {
     memset(pagetable.cast(), 0, PAGE_SIZE);
 
     // QEMU test interface used for power management.
-    kvmmap(
-        pagetable,
-        QEMU_POWER,
-        QEMU_POWER,
-        PAGE_SIZE,
-        PTE_R | PTE_W,
-    );
+    kvmmap(pagetable, QEMU_POWER, QEMU_POWER, PAGE_SIZE, PTE_R | PTE_W);
 
     // UART registers
     for (_, uart) in &crate::hardware::UARTS {
@@ -63,22 +57,10 @@ pub unsafe fn kvmmake() -> Pagetable {
     }
 
     // VirtIO MMIO disk interface
-    kvmmap(
-        pagetable,
-        VIRTIO0,
-        VIRTIO0,
-        PAGE_SIZE,
-        PTE_R | PTE_W,
-    );
+    kvmmap(pagetable, VIRTIO0, VIRTIO0, PAGE_SIZE, PTE_R | PTE_W);
 
     // PLIC
-    kvmmap(
-        pagetable,
-        PLIC,
-        PLIC,
-        0x400000,
-        PTE_R | PTE_W,
-    );
+    kvmmap(pagetable, PLIC, PLIC, 0x400000, PTE_R | PTE_W);
 
     let etext_addr = addr_of!(etext) as usize;
 
@@ -159,16 +141,19 @@ pub unsafe fn kvminithart() {
 /// - 21..30: 9 bits of level 0 index.
 /// - 30..39: 9 bits of level 0 index.
 /// - 39..64: Must be zero.
-pub unsafe fn walk(mut pagetable: Pagetable, virtual_addr: usize, alloc: bool) -> *mut PagetableEntry {
+pub unsafe fn walk(
+    mut pagetable: Pagetable,
+    virtual_addr: usize,
+    alloc: bool,
+) -> *mut PagetableEntry {
     if virtual_addr > VIRTUAL_MAX {
         panic!("walk");
     }
 
     let mut level = 2;
     while level > 0 {
-        let pte = addr_of_mut!(
-            pagetable.as_mut().unwrap()[(virtual_addr >> (12 + (level * 9))) & 0x1ff]
-        );
+        let pte =
+            addr_of_mut!(pagetable.as_mut().unwrap()[(virtual_addr >> (12 + (level * 9))) & 0x1ff]);
 
         if (*pte) & PTE_V as u64 > 0 {
             pagetable = (((*pte) >> 10) << 12) as usize as Pagetable;
@@ -202,7 +187,7 @@ pub unsafe extern "C" fn walkaddr(pagetable: Pagetable, virtual_addr: usize) -> 
         return 0;
     }
 
-    let pte = walk(pagetable, virtual_addr , false);
+    let pte = walk(pagetable, virtual_addr, false);
     if pte.is_null() || *pte & PTE_V as u64 == 0 || *pte & PTE_U as u64 == 0 {
         return 0;
     }
@@ -272,12 +257,7 @@ pub unsafe fn mappages(
 ///
 /// `virtual_addr` amust be page-aligned. The mappings must exist.
 /// Optionally free the physical memory.
-pub unsafe fn uvmunmap(
-    pagetable: Pagetable,
-    virtual_addr: usize,
-    num_pages: usize,
-    free: bool,
-) {
+pub unsafe fn uvmunmap(pagetable: Pagetable, virtual_addr: usize, num_pages: usize, free: bool) {
     if virtual_addr % PAGE_SIZE != 0 {
         panic!("uvmunmap: not aligned");
     }
@@ -359,14 +339,7 @@ pub unsafe extern "C" fn uvmalloc(
 
         memset(mem.cast(), 0, PAGE_SIZE);
 
-        if mappages(
-            pagetable,
-            a,
-            PAGE_SIZE,
-            mem as usize,
-            PTE_R | PTE_U | xperm,
-        ) != 0
-        {
+        if mappages(pagetable, a, PAGE_SIZE, mem as usize, PTE_R | PTE_U | xperm) != 0 {
             kfree(mem.cast());
             uvmdealloc(pagetable, a, old_size);
             return 0;
@@ -390,14 +363,8 @@ pub unsafe extern "C" fn uvmdealloc(pagetable: Pagetable, old_size: usize, new_s
     }
 
     if round_up_page(new_size) < round_up_page(old_size) {
-        let num_pages =
-            (round_up_page(old_size) - round_up_page(new_size)) / PAGE_SIZE;
-        uvmunmap(
-            pagetable,
-            round_up_page(new_size),
-            num_pages,
-            true,
-        );
+        let num_pages = (round_up_page(old_size) - round_up_page(new_size)) / PAGE_SIZE;
+        uvmunmap(pagetable, round_up_page(new_size), num_pages, true);
     }
 
     new_size as u64
@@ -424,12 +391,7 @@ pub unsafe fn freewalk(pagetable: Pagetable) {
 
 /// Free user memory pages, then free pagetable pages.
 pub unsafe fn uvmfree(pagetable: Pagetable, size: usize) {
-    uvmunmap(
-        pagetable,
-        0,
-        round_up_page(size) / PAGE_SIZE,
-        true,
-    );
+    uvmunmap(pagetable, 0, round_up_page(size) / PAGE_SIZE, true);
     freewalk(pagetable);
 }
 
@@ -563,7 +525,12 @@ pub unsafe extern "C" fn copyin(
 // depending on usr_dst.
 // Returns 0 on success, -1 on error.
 #[no_mangle]
-pub unsafe extern "C" fn either_copyout(user_dst: i32, dst: usize, src: *mut u8, len: usize) -> i32 {
+pub unsafe extern "C" fn either_copyout(
+    user_dst: i32,
+    dst: usize,
+    src: *mut u8,
+    len: usize,
+) -> i32 {
     let p = Process::current().unwrap();
 
     if user_dst > 0 {

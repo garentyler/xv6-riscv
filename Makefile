@@ -100,6 +100,7 @@ UPROGS=\
 	$P/_wc\
 	$P/_zombie\
 	$P/_shutdown\
+	$P/_clear\
 
 fs.img: mkfs README.md $(UPROGS)
 	mkfs/mkfs fs.img README.md $(UPROGS)

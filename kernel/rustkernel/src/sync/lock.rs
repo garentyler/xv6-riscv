@@ -5,7 +5,6 @@ use crate::proc::{
 };
 use core::{
     cell::UnsafeCell,
-    ops::Drop,
     ptr::{addr_of, null_mut},
     sync::atomic::{AtomicBool, Ordering},
 };

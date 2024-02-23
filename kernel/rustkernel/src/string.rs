@@ -1,4 +1,4 @@
-use core::{ffi::c_char, option::Option};
+use core::ffi::c_char;
 
 pub(crate) unsafe fn strlen_checked(s: *const c_char, max_chars: usize) -> Option<i32> {
     for len in 0..max_chars {

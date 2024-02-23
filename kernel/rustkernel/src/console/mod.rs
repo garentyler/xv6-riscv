@@ -13,7 +13,7 @@ pub mod printf;
 use crate::{
     arch::virtual_memory::{either_copyin, either_copyout},
     fs::file::{devsw, CONSOLE},
-    hardware::uart::Uart,
+    hardware::uart::BufferedUart,
     proc::{
         process::{procdump, Process},
         scheduler::wakeup,
@@ -22,7 +22,7 @@ use crate::{
 };
 use core::ptr::addr_of_mut;
 
-pub static UART0: &Uart = &crate::hardware::UARTS[0].1;
+pub static UART0: &BufferedUart = &crate::hardware::UARTS[0].1;
 
 pub const BACKSPACE: u8 = 0x00;
 pub const INPUT_BUF_SIZE: usize = 128;
@@ -48,8 +48,7 @@ impl Console {
 }
 impl core::fmt::Write for Console {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        UART0.write_slice(s.as_bytes());
-        core::fmt::Result::Ok(())
+        UART0.writer().write_str(s)
     }
 }
 
@@ -73,11 +72,9 @@ const fn ctrl_x(x: u8) -> u8 {
 pub fn consputc(c: u8) {
     if c == BACKSPACE {
         // If the user typed backspace, overwrite with a space.
-        UART0.write_byte(0x08);
-        UART0.write_byte(b' ');
-        UART0.write_byte(0x08);
+        UART0.write_slice_buffered(b"\x08 \x08");
     } else {
-        UART0.write_byte(c);
+        UART0.write_byte_buffered(c);
     }
 }
 

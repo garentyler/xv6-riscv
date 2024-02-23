@@ -2,8 +2,11 @@
 #![allow(non_upper_case_globals)]
 
 use crate::{
-    arch::trap::InterruptBlocker, console::consoleintr, proc::scheduler::wakeup, queue::Queue,
-    sync::mutex::Mutex,
+    arch::trap::InterruptBlocker,
+    console::consoleintr,
+    proc::scheduler::wakeup,
+    queue::Queue,
+    sync::mutex::{Mutex, MutexGuard},
 };
 use core::ptr::addr_of;
 
@@ -59,14 +62,10 @@ impl Register {
 
 pub struct Uart {
     pub base_address: usize,
-    pub buffer: Mutex<Queue<u8>>,
 }
 impl Uart {
     pub const fn new(base_address: usize) -> Uart {
-        Uart {
-            base_address,
-            buffer: Mutex::new(Queue::new()),
-        }
+        Uart { base_address }
     }
     /// Initialize the UART.
     pub unsafe fn initialize(&self) {
@@ -86,14 +85,12 @@ impl Uart {
         // Enable transmit and receive interrupts.
         Register::InterruptEnable.write(self.base_address, IER_TX_ENABLE | IER_RX_ENABLE);
     }
+    /// Handle an interrupt from the hardware.
     pub fn interrupt(&self) {
         // Read and process incoming data.
         while let Some(b) = self.read_byte() {
             consoleintr(b);
         }
-
-        // Send buffered characters.
-        self.send_buffered_bytes();
     }
     /// Read one byte from the UART.
     pub fn read_byte(&self) -> Option<u8> {
@@ -104,39 +101,80 @@ impl Uart {
             None
         }
     }
-    /// Write a byte to the UART without interrupts.
-    /// Used for kernel printing and character echoing.
-    pub fn write_byte(&self, b: u8) {
+    pub fn writer(&self) -> UartWriter<'_> {
+        UartWriter(self)
+    }
+    pub fn can_write_byte(&self) -> bool {
+        Register::LineStatus.read(self.base_address) & LSR_TX_IDLE != 0
+    }
+    /// Attempt to write one byte to the UART.
+    /// Returns a bool representing whether the byte was written.
+    pub fn write_byte(&self, byte: u8) -> bool {
+        // Block interrupts to prevent TOCTOU manipulation.
         let _ = InterruptBlocker::new();
-
-        if *crate::PANICKED.lock_spinning() {
-            loop {
-                core::hint::spin_loop();
-            }
+        if self.can_write_byte() {
+            Register::TransmitHolding.write(self.base_address, byte);
+            true
+        } else {
+            false
         }
-
-        // Wait for Transmit Holding Empty to be set in LSR.
-        while Register::LineStatus.read(self.base_address) & LSR_TX_IDLE == 0 {
+    }
+    pub fn write_byte_blocking(&self, byte: u8) {
+        while !self.write_byte(byte) {
             core::hint::spin_loop();
         }
-
-        Register::TransmitHolding.write(self.base_address, b);
     }
-    pub fn write_slice(&self, bytes: &[u8]) {
+    pub fn write_slice_blocking(&self, bytes: &[u8]) {
         for b in bytes {
             self.write_byte(*b);
         }
     }
+}
+impl From<BufferedUart> for Uart {
+    fn from(value: BufferedUart) -> Self {
+        value.inner
+    }
+}
+
+#[derive(Copy, Clone)]
+pub struct UartWriter<'u>(&'u Uart);
+impl<'u> core::fmt::Write for UartWriter<'u> {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        self.0.write_slice_blocking(s.as_bytes());
+        core::fmt::Result::Ok(())
+    }
+}
+
+pub struct BufferedUart {
+    inner: Uart,
+    buffer: Mutex<Queue<u8>>,
+}
+impl BufferedUart {
+    pub const fn new(base_address: usize) -> BufferedUart {
+        BufferedUart {
+            inner: Uart::new(base_address),
+            buffer: Mutex::new(Queue::new()),
+        }
+    }
+    pub fn interrupt(&self) {
+        let _ = InterruptBlocker::new();
+
+        self.inner.interrupt();
+
+        // Send buffered characters.
+        let buf = self.buffer.lock_spinning();
+        self.send_buffered_bytes(buf);
+    }
+    pub fn writer(&self) -> BufferedUartWriter<'_> {
+        BufferedUartWriter(self)
+    }
+    pub fn writer_unbuffered(&self) -> UartWriter<'_> {
+        self.inner.writer()
+    }
     /// Write a byte to the UART and buffer it.
     /// Should not be used in interrupts.
-    pub fn write_byte_buffered(&self, b: u8) {
+    pub fn write_byte_buffered(&self, byte: u8) {
         let mut buf = self.buffer.lock_spinning();
-
-        if *crate::PANICKED.lock_spinning() {
-            loop {
-                core::hint::spin_loop();
-            }
-        }
 
         // Sleep until there is space in the buffer.
         while buf.space_remaining() == 0 {
@@ -146,48 +184,69 @@ impl Uart {
         }
 
         // Add the byte onto the end of the queue.
-        buf.push_back(b).expect("space in the uart queue");
+        buf.push_back(byte).expect("space in the uart queue");
         // Drop buf so that send_buffered_bytes() can lock it again.
-        core::mem::drop(buf);
-        self.send_buffered_bytes();
+        self.send_buffered_bytes(buf);
     }
+    /// Write a slice to the UART and buffer it.
+    /// Should not be used in interrupts.
     pub fn write_slice_buffered(&self, bytes: &[u8]) {
         for b in bytes {
             self.write_byte_buffered(*b);
         }
     }
-    /// If the UART is idle, and a character is
+    /// If the UART is idle and a character is
     /// waiting in the transmit buffer, send it.
-    /// self.lock should be held.
-    fn send_buffered_bytes(&self) {
-        let mut buf = self.buffer.lock_spinning();
+    /// Returns how many bytes were sent.
+    fn send_buffered_bytes(&self, mut buf: MutexGuard<'_, Queue<u8>>) -> usize {
+        let mut i = 0;
 
         loop {
-            if Register::LineStatus.read(self.base_address) & LSR_TX_IDLE == 0 {
+            if !self.inner.can_write_byte() {
                 // The UART transmit holding register is full,
                 // so we cannot give it another byte.
                 // It will interrupt when it's ready for a new byte.
-                return;
+                break;
             }
 
-            // Pop a byte from the front of the queue.
-            let Some(b) = buf.pop_front() else {
+            // Pop a byte from the front of the queue and send it.
+            match buf.pop_front() {
+                Some(b) => self.inner.write_byte(b),
                 // The buffer is empty, we're finished sending bytes.
-                return;
+                None => return 0,
             };
 
-            // Maybe uartputc() is waiting for space in the buffer.
+            i += 1;
+
+            // Check if uartputc() is waiting for space in the buffer.
             unsafe {
                 wakeup(addr_of!(*self).cast_mut().cast());
             }
+        }
 
-            Register::TransmitHolding.write(self.base_address, b);
+        i
+    }
+}
+impl core::ops::Deref for BufferedUart {
+    type Target = Uart;
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+impl From<Uart> for BufferedUart {
+    fn from(value: Uart) -> Self {
+        BufferedUart {
+            inner: value,
+            buffer: Mutex::new(Queue::new()),
         }
     }
 }
-impl core::fmt::Write for Uart {
+
+#[derive(Copy, Clone)]
+pub struct BufferedUartWriter<'u>(&'u BufferedUart);
+impl<'u> core::fmt::Write for BufferedUartWriter<'u> {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        self.write_slice(s.as_bytes());
+        self.0.write_slice_buffered(s.as_bytes());
         core::fmt::Result::Ok(())
     }
 }

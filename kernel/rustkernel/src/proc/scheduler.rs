@@ -5,6 +5,7 @@ use super::{
 };
 use crate::{
     arch,
+    console::printf::println,
     sync::spinlock::{Spinlock, SpinlockGuard},
 };
 use core::{
@@ -34,6 +35,8 @@ pub unsafe fn r#yield() {
 //  - eventually that process transfers control
 //    via swtch back to the scheduler.
 pub unsafe fn scheduler() -> ! {
+    println!("hart {} starting scheduler", Cpu::current_id());
+
     let cpu = Cpu::current();
     cpu.proc = null_mut();
 

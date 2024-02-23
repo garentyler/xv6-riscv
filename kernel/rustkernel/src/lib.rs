@@ -4,6 +4,7 @@
 #![allow(clippy::missing_safety_doc)]
 #![feature(negative_impls)]
 #![feature(panic_info_message)]
+#![feature(str_from_raw_parts)]
 
 extern crate alloc;
 extern crate core;
@@ -21,9 +22,12 @@ mod sync;
 mod syscall;
 
 use crate::{proc::cpu::Cpu, sync::mutex::Mutex};
-use core::ffi::{c_char, CStr};
+use core::{
+    ffi::{c_char, CStr},
+    ptr::addr_of,
+};
 
-pub(crate) use crate::console::printf::{print, println, uprintln};
+pub(crate) use crate::console::printf::{print, println, uprint, uprintln};
 
 pub static mut STARTED: bool = false;
 pub static PANICKED: Mutex<bool> = Mutex::new(false);
@@ -79,34 +83,33 @@ pub unsafe fn main() -> ! {
         arch::trap::inithart();
         arch::interrupt::inithart();
     }
-
     proc::scheduler::scheduler();
 }
 
 #[panic_handler]
 fn panic_wrapper(panic_info: &core::panic::PanicInfo) -> ! {
     if let Some(location) = panic_info.location() {
-        print!("kernel panic ({}): ", location.file());
+        uprint!("kernel panic ({}): ", location.file());
     } else {
-        print!("kernel panic: ");
+        uprint!("kernel panic: ");
     }
 
     if let Some(s) = panic_info.message() {
-        println!("{}", s);
+        uprintln!("{}", s);
     } else if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
-        println!("{}", s);
+        uprintln!("{}", s);
     } else if let Some(s) = panic_info.payload().downcast_ref::<&CStr>() {
-        println!("{:?}", s);
+        uprintln!("{:?}", s);
     } else {
-        println!("could not recover error message");
+        uprintln!("could not recover error message");
     }
 
-    println!("███████╗██╗   ██╗ ██████╗██╗  ██╗██╗██╗");
-    println!("██╔════╝██║   ██║██╔════╝██║ ██╔╝██║██║");
-    println!("█████╗  ██║   ██║██║     █████╔╝ ██║██║");
-    println!("██╔══╝  ██║   ██║██║     ██╔═██╗ ╚═╝╚═╝");
-    println!("██║     ╚██████╔╝╚██████╗██║  ██╗██╗██╗");
-    println!("╚═╝      ╚═════╝  ╚═════╝╚═╝  ╚═╝╚═╝╚═╝");
+    uprintln!("███████╗██╗   ██╗ ██████╗██╗  ██╗██╗██╗");
+    uprintln!("██╔════╝██║   ██║██╔════╝██║ ██╔╝██║██║");
+    uprintln!("█████╗  ██║   ██║██║     █████╔╝ ██║██║");
+    uprintln!("██╔══╝  ██║   ██║██║     ██╔═██╗ ╚═╝╚═╝");
+    uprintln!("██║     ╚██████╔╝╚██████╗██║  ██╗██╗██╗");
+    uprintln!("╚═╝      ╚═════╝  ╚═════╝╚═╝  ╚═╝╚═╝╚═╝");
 
     unsafe {
         *crate::PANICKED.lock_spinning() = true;
@@ -120,8 +123,17 @@ fn panic_wrapper(panic_info: &core::panic::PanicInfo) -> ! {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn panic(_: *const c_char) -> ! {
-    panic!("panic from c");
-    // let s = CStr::from_ptr(s).to_str().unwrap_or("panic from c");
-    // panic!("{:?}", CStr::from_ptr(s));
+pub unsafe extern "C" fn panic(msg: *const c_char) -> ! {
+    let mut message = [b' '; 32];
+    let mut i = 0;
+    loop {
+        match *msg.add(i) {
+            0 => break,
+            c => message[i] = c as u8,
+        }
+        i += 1;
+    }
+    let message = core::str::from_raw_parts(addr_of!(message[0]), i);
+
+    panic!("panic from c: {}", message);
 }

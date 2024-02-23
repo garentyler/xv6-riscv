@@ -4,8 +4,7 @@ use super::{
 };
 use core::{
     cell::UnsafeCell,
-    convert::{AsMut, AsRef},
-    ops::{Deref, DerefMut, Drop},
+    ops::{Deref, DerefMut},
 };
 
 pub struct Mutex<T> {
