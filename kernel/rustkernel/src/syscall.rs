@@ -1,14 +1,16 @@
 use crate::{
-    arch::{
-        clock::CLOCK_TICKS,
-        power::shutdown,
-        virtual_memory::{copyin, copyinstr},
-    },
     fs::{
         file::{self, File},
         inode::{ilock, iput, iunlock, namei},
         log::LogOperation,
         stat::KIND_DIR,
+    },
+    hal::{
+        arch::{
+            clock::CLOCK_TICKS,
+            virtual_memory::{copyin, copyinstr},
+        },
+        platform::shutdown,
     },
     println,
     proc::process::Process,

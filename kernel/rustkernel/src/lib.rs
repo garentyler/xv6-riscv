@@ -9,10 +9,10 @@
 extern crate alloc;
 extern crate core;
 
-mod arch;
+mod hal;
+
 mod console;
 mod fs;
-mod hardware;
 mod io;
 mod mem;
 mod proc;
@@ -64,24 +64,24 @@ pub unsafe fn main() -> ! {
         console::consoleinit();
         mem::kalloc::kinit();
         println!("\nxv6 kernel is booting");
-        arch::virtual_memory::init();
-        arch::virtual_memory::inithart();
+        hal::arch::virtual_memory::init();
+        hal::arch::virtual_memory::inithart();
         proc::process::procinit();
-        arch::trap::inithart();
-        arch::interrupt::init();
-        arch::interrupt::inithart();
+        hal::arch::trap::inithart();
+        hal::arch::interrupt::init();
+        hal::arch::interrupt::inithart();
         io::bio::binit();
         fs::inode::iinit();
-        hardware::virtio_disk::virtio_disk_init();
+        hal::hardware::virtio_disk::virtio_disk_init();
         proc::process::userinit();
         STARTED = true;
     } else {
         while !STARTED {
             core::hint::spin_loop();
         }
-        arch::virtual_memory::inithart();
-        arch::trap::inithart();
-        arch::interrupt::inithart();
+        hal::arch::virtual_memory::inithart();
+        hal::arch::trap::inithart();
+        hal::arch::interrupt::inithart();
     }
     proc::scheduler::scheduler();
 }

@@ -1,8 +1,11 @@
-use super::{asm, MIE_MTIE, MSTATUS_MIE};
-use crate::NCPU;
+use crate::{
+    hal::arch::riscv::{asm, MIE_MTIE, MSTATUS_MIE},
+    NCPU,
+};
 use core::ptr::addr_of;
 
 // Core Local Interrupter (CLINT), which contains the timer.
+// I'm pretty sure the CLINT address is standardized to this location.
 pub const CLINT: usize = 0x2000000;
 const CLINT_MTIME: usize = CLINT + 0xbff8;
 

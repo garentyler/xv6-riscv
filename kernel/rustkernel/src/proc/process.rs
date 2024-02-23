@@ -7,20 +7,20 @@ use super::{
     trapframe::Trapframe,
 };
 use crate::{
-    arch::{
-        mem::{kstack, Pagetable, PAGE_SIZE, PTE_R, PTE_W, PTE_X, TRAMPOLINE, TRAPFRAME},
-        trap::{usertrapret, InterruptBlocker},
-        virtual_memory::{
-            copyout, mappages, uvmalloc, uvmcopy, uvmcreate, uvmdealloc, uvmfirst, uvmfree,
-            uvmunmap,
-        },
-    },
     fs::{
         file::{fileclose, filedup, File},
         fsinit,
         inode::{idup, iput, namei, Inode},
         log::LogOperation,
         FS_INITIALIZED,
+    },
+    hal::arch::{
+        mem::{kstack, Pagetable, PAGE_SIZE, PTE_R, PTE_W, PTE_X, TRAMPOLINE, TRAPFRAME},
+        trap::{usertrapret, InterruptBlocker},
+        virtual_memory::{
+            copyout, mappages, uvmalloc, uvmcopy, uvmcreate, uvmdealloc, uvmfirst, uvmfree,
+            uvmunmap,
+        },
     },
     mem::{
         kalloc::{kalloc, kfree},

@@ -28,7 +28,7 @@ impl Cpu {
     /// to prevent race with process being moved
     /// to a different CPU.
     pub fn current_id() -> usize {
-        crate::arch::cpu::cpu_id()
+        crate::hal::arch::cpu::cpu_id()
     }
     /// Return this CPU's cpu struct.
     /// Interrupts must be disabled.

@@ -1,7 +1,5 @@
 #[cfg(target_arch = "riscv64")]
-mod riscv;
-#[cfg(target_arch = "riscv64")]
-pub use riscv::hardware;
+pub mod riscv;
 
 pub mod trap;
 
@@ -12,12 +10,12 @@ pub mod cpu {
 
 pub mod interrupt {
     #[cfg(target_arch = "riscv64")]
-    pub use super::riscv::{
-        asm::{
+    pub use crate::hal::{
+        arch::riscv::asm::{
             intr_get as interrupts_enabled, intr_off as disable_interrupts,
             intr_on as enable_interrupts,
         },
-        plic::{
+        hardware::riscv::plic::{
             plic_claim as handle_interrupt, plic_complete as complete_interrupt, plicinit as init,
             plicinithart as inithart,
         },
@@ -29,8 +27,7 @@ pub mod mem {
     pub use super::riscv::{
         asm::sfence_vma as flush_cached_pages,
         mem::{
-            kstack, Pagetable, PagetableEntry, KERNEL_BASE, PAGE_SIZE, PHYSICAL_END, PTE_R, PTE_U,
-            PTE_V, PTE_W, PTE_X, TRAMPOLINE, TRAPFRAME, VIRTUAL_MAX,
+            kstack, Pagetable, PAGE_SIZE, PHYSICAL_END, PTE_R, PTE_W, PTE_X, TRAMPOLINE, TRAPFRAME,
         },
     };
 
@@ -50,11 +47,6 @@ pub mod virtual_memory {
         kvminithart as inithart, mappages, uvmalloc, uvmcopy, uvmcreate, uvmdealloc, uvmfirst,
         uvmfree, uvmunmap,
     };
-}
-
-pub mod power {
-    #[cfg(target_arch = "riscv64")]
-    pub use super::riscv::power::shutdown;
 }
 
 pub mod clock {

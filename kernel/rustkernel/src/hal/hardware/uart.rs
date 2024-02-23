@@ -2,8 +2,8 @@
 #![allow(non_upper_case_globals)]
 
 use crate::{
-    arch::trap::InterruptBlocker,
     console::consoleintr,
+    hal::arch::trap::InterruptBlocker,
     proc::scheduler::wakeup,
     queue::Queue,
     sync::mutex::{Mutex, MutexGuard},

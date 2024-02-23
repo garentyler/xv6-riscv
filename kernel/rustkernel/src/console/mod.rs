@@ -11,9 +11,9 @@
 pub mod printf;
 
 use crate::{
-    arch::virtual_memory::{either_copyin, either_copyout},
     fs::file::{devsw, CONSOLE},
-    hardware::uart::BufferedUart,
+    hal::arch::virtual_memory::{either_copyin, either_copyout},
+    hal::hardware::uart::BufferedUart,
     proc::{
         process::{procdump, Process},
         scheduler::wakeup,
@@ -22,7 +22,7 @@ use crate::{
 };
 use core::ptr::addr_of_mut;
 
-pub static UART0: &BufferedUart = &crate::hardware::UARTS[0].1;
+pub static UART0: &BufferedUart = &crate::hal::platform::UARTS[0].1;
 
 pub const BACKSPACE: u8 = 0x00;
 pub const INPUT_BUF_SIZE: usize = 128;

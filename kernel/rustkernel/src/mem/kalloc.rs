@@ -3,7 +3,7 @@
 //! and pipe buffers. Allocates whole 4096-byte pages.
 
 use crate::{
-    arch::mem::{round_up_page, PAGE_SIZE, PHYSICAL_END},
+    hal::arch::mem::{round_up_page, PAGE_SIZE, PHYSICAL_END},
     mem::memset,
     sync::spinlock::Spinlock,
 };

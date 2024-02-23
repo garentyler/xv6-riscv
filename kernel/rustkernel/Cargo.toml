@@ -10,5 +10,10 @@ license = "LGPL-3.0-only"
 [dependencies]
 arrayvec = { version = "0.7.4", default-features = false }
 
+[features]
+default = ["qemu-riscv64"]
+qemu-riscv64 = []
+milk-v = []
+
 [lib]
 crate-type = ["staticlib"]

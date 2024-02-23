@@ -4,8 +4,8 @@ use super::{
     process::{Process, ProcessState, PROCESSES},
 };
 use crate::{
-    arch,
     console::printf::println,
+    hal::arch,
     sync::spinlock::{Spinlock, SpinlockGuard},
 };
 use core::{

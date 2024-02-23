@@ -1,17 +1,16 @@
-use super::{
-    asm,
-    mem::{kstack, make_satp, pte2pa},
-    plic::PLIC,
-    power::QEMU_POWER,
-};
 use crate::{
-    arch::{
-        self,
-        hardware::VIRTIO0,
-        mem::{
-            round_down_page, round_up_page, Pagetable, PagetableEntry, KERNEL_BASE, PAGE_SIZE,
-            PHYSICAL_END, PTE_R, PTE_U, PTE_V, PTE_W, PTE_X, TRAMPOLINE, VIRTUAL_MAX,
+    hal::{
+        arch::{
+            mem::{flush_cached_pages, round_down_page, round_up_page},
+            riscv::{
+                asm,
+                mem::{
+                    kstack, make_satp, pte2pa, Pagetable, PagetableEntry, KERNEL_BASE, PAGE_SIZE,
+                    PHYSICAL_END, PTE_R, PTE_U, PTE_V, PTE_W, PTE_X, TRAMPOLINE, VIRTUAL_MAX,
+                },
+            },
         },
+        hardware::riscv::plic::PLIC,
     },
     mem::{
         kalloc::{kalloc, kfree},
@@ -42,11 +41,12 @@ pub unsafe fn kvmmake() -> Pagetable {
     }
     memset(pagetable.cast(), 0, PAGE_SIZE);
 
-    // QEMU test interface used for power management.
-    kvmmap(pagetable, QEMU_POWER, QEMU_POWER, PAGE_SIZE, PTE_R | PTE_W);
+    for page in &crate::hal::platform::DIRECT_MAPPED_PAGES {
+        kvmmap(pagetable, *page, *page, PAGE_SIZE, PTE_R | PTE_W);
+    }
 
     // UART registers
-    for (_, uart) in &crate::hardware::UARTS {
+    for (_, uart) in &crate::hal::platform::UARTS {
         kvmmap(
             pagetable,
             uart.base_address,
@@ -56,8 +56,16 @@ pub unsafe fn kvmmake() -> Pagetable {
         );
     }
 
-    // VirtIO MMIO disk interface
-    kvmmap(pagetable, VIRTIO0, VIRTIO0, PAGE_SIZE, PTE_R | PTE_W);
+    // VirtIO MMIO disk interfaces
+    for (_, virtio_disk_addr) in &crate::hal::platform::VIRTIO_DISKS {
+        kvmmap(
+            pagetable,
+            *virtio_disk_addr,
+            *virtio_disk_addr,
+            PAGE_SIZE,
+            PTE_R | PTE_W,
+        );
+    }
 
     // PLIC
     kvmmap(pagetable, PLIC, PLIC, 0x400000, PTE_R | PTE_W);
@@ -119,12 +127,12 @@ pub unsafe fn kvminit() {
 /// Switch hardware pagetable register to the kernel's pagetable and enable paging.
 pub unsafe fn kvminithart() {
     // Wait for any previous writes to the pagetable memory to finish.
-    arch::mem::flush_cached_pages();
+    flush_cached_pages();
 
     asm::w_satp(make_satp(KERNEL_PAGETABLE));
 
     // Flush stale entries from the TLB.
-    arch::mem::flush_cached_pages();
+    flush_cached_pages();
 }
 
 /// Return the address of the PTE in pagetable

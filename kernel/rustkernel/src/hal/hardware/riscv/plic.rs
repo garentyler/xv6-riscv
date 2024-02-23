@@ -1,13 +1,15 @@
 //! The RISC-V Platform Level Interrupt Controller (PLIC)
 
-use super::hardware::VIRTIO0_IRQ;
+use crate::hal::platform::VIRTIO0_IRQ;
 use crate::proc::cpu::Cpu;
 
-// QEMU puts platform-level interrupt controller (PLIC) here.
-pub const PLIC: usize = 0x0c000000;
+// (VIRTIO0_IRQ, VIRTIO0_IRQ_ADDR)
+const VIRTIO0_IRQ_ADDR: usize = PLIC + VIRTIO0_IRQ * 4;
+
+pub use crate::hal::platform::PLIC_BASE_ADDR as PLIC;
+use crate::uprintln;
 const PLIC_PRIORITY: usize = PLIC;
 const PLIC_PENDING: usize = PLIC + 0x1000;
-const VIRTIO0_IRQ_ADDR: usize = PLIC + VIRTIO0_IRQ * 4;
 
 /// Get a pointer to the CPU-specific machine-mode enable register.
 fn plic_menable(hartid: usize) -> *mut u32 {
@@ -36,10 +38,12 @@ fn plic_sclaim(hartid: usize) -> *mut u32 {
 
 pub unsafe fn plicinit() {
     // Set desired IRQ priorities non-zero (otherwise disabled).
-    for (uart_irq, _) in &crate::hardware::UARTS {
+    for (uart_irq, _) in &crate::hal::platform::UARTS {
         *((PLIC + uart_irq * 4) as *mut u32) = 1;
     }
-    *(VIRTIO0_IRQ_ADDR as *mut u32) = 1;
+    for (virtio_disk_irq, _) in &crate::hal::platform::VIRTIO_DISKS {
+        *((PLIC + virtio_disk_irq * 4) as *mut u32) = 1;
+    }
 }
 
 pub unsafe fn plicinithart() {
@@ -48,9 +52,12 @@ pub unsafe fn plicinithart() {
     // Set enable bits for this hart's S-mode
     // for the UART and VIRTIO disk.
     let mut enable_bits = 0;
-    for (uart_irq, _) in &crate::hardware::UARTS {
+    for (uart_irq, _) in &crate::hal::platform::UARTS {
         enable_bits |= 1 << uart_irq;
     }
+    // for (virtio_disk_irq, _) in &crate::hal::platform::VIRTIO_DISKS {
+    //     enable_bits |= 1 << virtio_disk_irq;
+    // }
     enable_bits |= 1 << VIRTIO0_IRQ;
     *plic_senable(hart) = enable_bits;
 

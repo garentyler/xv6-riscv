@@ -1,5 +1,10 @@
-use super::{asm, clint, MSTATUS_MPP_MASK, MSTATUS_MPP_S, SIE_SEIE, SIE_SSIE, SIE_STIE};
-use crate::{main, NCPU};
+use crate::{
+    hal::{
+        arch::riscv::{asm, MSTATUS_MPP_MASK, MSTATUS_MPP_S, SIE_SEIE, SIE_SSIE, SIE_STIE},
+        hardware::riscv::clint,
+    },
+    main, NCPU,
+};
 use core::arch::asm;
 
 #[no_mangle]

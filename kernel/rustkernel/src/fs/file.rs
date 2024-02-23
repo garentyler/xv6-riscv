@@ -2,8 +2,8 @@
 
 use super::inode::{iput, readi, stati, writei, Inode, InodeLockGuard};
 use crate::{
-    arch::virtual_memory::copyout,
     fs::{log, stat::Stat},
+    hal::arch::virtual_memory::copyout,
     io::pipe::Pipe,
     proc::process::Process,
     sync::mutex::Mutex,

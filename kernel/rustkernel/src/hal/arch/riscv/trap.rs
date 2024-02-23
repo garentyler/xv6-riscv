@@ -1,9 +1,11 @@
 use super::{asm, mem::make_satp, SSTATUS_SPIE, SSTATUS_SPP};
 use crate::{
-    arch::{
-        hardware::VIRTIO0_IRQ,
-        interrupt,
-        mem::{PAGE_SIZE, TRAMPOLINE},
+    hal::{
+        arch::{
+            interrupt,
+            mem::{PAGE_SIZE, TRAMPOLINE},
+        },
+        platform::VIRTIO0_IRQ,
     },
     println,
     proc::{
@@ -57,7 +59,7 @@ pub unsafe fn devintr() -> i32 {
         let irq = interrupt::handle_interrupt();
 
         let mut uart_interrupt = false;
-        for (uart_irq, uart) in &crate::hardware::UARTS {
+        for (uart_irq, uart) in &crate::hal::platform::UARTS {
             if irq == *uart_irq {
                 uart_interrupt = true;
                 uart.interrupt();

@@ -1,5 +1,5 @@
 use crate::{
-    arch::trap::{pop_intr_off, push_intr_off},
+    hal::arch::trap::{pop_intr_off, push_intr_off},
     proc::{
         process::{Process, ProcessState},
         scheduler::sched,
